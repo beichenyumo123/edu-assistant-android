@@ -7,17 +7,20 @@ import com.zxxf.assistant.data.websocket.ChatWebSocket
 import com.zxxf.assistant.data.websocket.WsMessage
 import com.zxxf.assistant.util.TokenManager
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 
 class ChatRepository(
-    private val chatApi: ChatApi,
-    private val baseUrl: String,
+    private val chatApiProvider: () -> ChatApi,
+    private val baseUrlProvider: () -> String,
     private val tokenManager: TokenManager
 ) {
     private var webSocket: ChatWebSocket? = null
 
+    private val chatApi: ChatApi get() = chatApiProvider()
+    private val baseUrl: String get() = baseUrlProvider()
+
     /**
      * Connect WebSocket for streaming chat. Call once after login.
+     * Uses the current baseUrl from ServerConfig each time.
      */
     fun connectWebSocket(userId: Int): Flow<WsMessage> {
         webSocket?.disconnect()

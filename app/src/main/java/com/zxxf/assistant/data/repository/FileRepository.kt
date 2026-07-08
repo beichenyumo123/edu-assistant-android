@@ -12,7 +12,9 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.FileOutputStream
 
-class FileRepository(private val fileApi: FileApi) {
+class FileRepository(private val fileApiProvider: () -> FileApi) {
+
+    private val fileApi: FileApi get() = fileApiProvider()
 
     suspend fun list(): FileListResponse {
         return fileApi.list()

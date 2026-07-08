@@ -6,7 +6,9 @@ import com.zxxf.assistant.data.dto.ExtractKnowledgeResponse
 import com.zxxf.assistant.data.dto.SummarizeRequest
 import com.zxxf.assistant.data.dto.SummarizeResponse
 
-class ToolRepository(private val toolApi: ToolApi) {
+class ToolRepository(private val toolApiProvider: () -> ToolApi) {
+
+    private val toolApi: ToolApi get() = toolApiProvider()
 
     suspend fun summarize(documentId: Long, length: String = "medium"): SummarizeResponse {
         return toolApi.summarize(SummarizeRequest(documentId, length))

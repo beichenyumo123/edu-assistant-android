@@ -4,7 +4,9 @@ import com.zxxf.assistant.data.api.ConversationApi
 import com.zxxf.assistant.data.dto.ConversationDetailResponse
 import com.zxxf.assistant.data.dto.ConversationListResponse
 
-class ConversationRepository(private val conversationApi: ConversationApi) {
+class ConversationRepository(private val conversationApiProvider: () -> ConversationApi) {
+
+    private val conversationApi: ConversationApi get() = conversationApiProvider()
 
     suspend fun list(): ConversationListResponse {
         return conversationApi.list()

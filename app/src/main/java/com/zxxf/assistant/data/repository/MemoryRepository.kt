@@ -4,7 +4,9 @@ import com.zxxf.assistant.data.api.MemoryApi
 import com.zxxf.assistant.data.dto.MemoryResponse
 import com.zxxf.assistant.data.dto.MemoryUpdateRequest
 
-class MemoryRepository(private val memoryApi: MemoryApi) {
+class MemoryRepository(private val memoryApiProvider: () -> MemoryApi) {
+
+    private val memoryApi: MemoryApi get() = memoryApiProvider()
 
     suspend fun getMemory(): MemoryResponse {
         return memoryApi.getMemory()

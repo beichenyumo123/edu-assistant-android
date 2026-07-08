@@ -5,9 +5,11 @@ import com.zxxf.assistant.data.dto.*
 import com.zxxf.assistant.util.TokenManager
 
 class AuthRepository(
-    private val authApi: AuthApi,
+    private val authApiProvider: () -> AuthApi,
     private val tokenManager: TokenManager
 ) {
+    private val authApi: AuthApi get() = authApiProvider()
+
     suspend fun login(username: String, password: String): TokenResponse {
         val response = authApi.login(LoginRequest(username, password))
         tokenManager.token = response.accessToken

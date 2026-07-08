@@ -61,14 +61,14 @@ class AppContainer(context: Context) {
     val toolApi: ToolApi get() = retrofit.create(ToolApi::class.java)
     val memoryApi: MemoryApi get() = retrofit.create(MemoryApi::class.java)
 
-    // ── Repositories ──
+    // ── Repositories (use lambda providers so URL changes take effect immediately) ──
 
-    val authRepository: AuthRepository get() = AuthRepository(authApi, tokenManager)
-    val conversationRepository: ConversationRepository get() = ConversationRepository(conversationApi)
-    val fileRepository: FileRepository get() = FileRepository(fileApi)
-    val toolRepository: ToolRepository get() = ToolRepository(toolApi)
-    val memoryRepository: MemoryRepository get() = MemoryRepository(memoryApi)
-    val chatRepository: ChatRepository get() = ChatRepository(chatApi, baseUrl, tokenManager)
+    val authRepository: AuthRepository get() = AuthRepository({ authApi }, tokenManager)
+    val conversationRepository: ConversationRepository get() = ConversationRepository({ conversationApi })
+    val fileRepository: FileRepository get() = FileRepository({ fileApi })
+    val toolRepository: ToolRepository get() = ToolRepository({ toolApi })
+    val memoryRepository: MemoryRepository get() = MemoryRepository({ memoryApi })
+    val chatRepository: ChatRepository get() = ChatRepository({ chatApi }, { baseUrl }, tokenManager)
 
     companion object {
         const val EMULATOR_BASE_URL = "http://10.0.2.2:8000"
