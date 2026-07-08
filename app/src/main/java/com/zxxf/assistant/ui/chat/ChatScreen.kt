@@ -59,8 +59,13 @@ fun ChatScreen(
 
     // Connect WebSocket on first launch
     LaunchedEffect(Unit) {
-        val user = appContainer.authRepository.getCurrentUser()
-        chatViewModel.connectWebSocket(user.user.id)
+        try {
+            val user = appContainer.authRepository.getCurrentUser()
+            chatViewModel.connectWebSocket(user.user.id)
+        } catch (e: Exception) {
+            // If getCurrentUser fails, the AuthInterceptor will handle 401
+            // Don't crash the effect — it would restart and cause flickering
+        }
     }
 
     // Auto-scroll to bottom on new messages or streaming content

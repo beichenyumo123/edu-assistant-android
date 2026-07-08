@@ -60,10 +60,12 @@ fun AppNavGraph(
                 }
             )
 
-            // Navigate to chat when logged in
-            if (authState.isLoggedIn) {
-                navController.navigate(Routes.CHAT) {
-                    popUpTo(Routes.LOGIN) { inclusive = true }
+            // Navigate to chat when logged in (must be in LaunchedEffect, not composition)
+            LaunchedEffect(authState.isLoggedIn) {
+                if (authState.isLoggedIn) {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
                 }
             }
         }
@@ -81,10 +83,12 @@ fun AppNavGraph(
                 }
             )
 
-            // Navigate to chat when registered
-            if (authState.isLoggedIn) {
-                navController.navigate(Routes.CHAT) {
-                    popUpTo(0) { inclusive = true }
+            // Navigate to chat when registered (must be in LaunchedEffect, not composition)
+            LaunchedEffect(authState.isLoggedIn) {
+                if (authState.isLoggedIn) {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(0) { inclusive = true }
+                    }
                 }
             }
         }
