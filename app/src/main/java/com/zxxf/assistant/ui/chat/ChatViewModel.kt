@@ -16,7 +16,9 @@ data class ChatUiState(
     val isThinking: Boolean = false,
     val thinkingSteps: List<AgentStepMsg> = emptyList(),
     val streamingContent: String = "",
-    val error: String? = null
+    val error: String? = null,
+    val totalDocumentCount: Int = 0,
+    val selectedDocCount: Int = 0
 )
 
 data class MessageUiItem(
@@ -25,7 +27,8 @@ data class MessageUiItem(
     val content: String,
     val sources: List<SourceDto>? = null,
     val agentSteps: List<AgentStepDto>? = null,
-    val evaluation: EvaluationDto? = null
+    val evaluation: EvaluationDto? = null,
+    val isStreaming: Boolean = false  // true while tokens are still arriving
 )
 
 data class AgentStepMsg(
@@ -142,8 +145,8 @@ class ChatViewModel(
 
         // Add user message
         val userMsg = MessageUiItem(role = "user", content = text)
-        // Add empty assistant placeholder
-        val assistantMsg = MessageUiItem(role = "assistant", content = "")
+        // Add empty assistant placeholder with streaming flag
+        val assistantMsg = MessageUiItem(role = "assistant", content = "", isStreaming = true)
 
         _uiState.update {
             it.copy(
@@ -172,7 +175,8 @@ class ChatViewModel(
                                 content = response.message.content,
                                 sources = response.message.sources,
                                 agentSteps = response.agentSteps,
-                                evaluation = response.evaluation
+                                evaluation = response.evaluation,
+                                isStreaming = false
                             )
                         }
                         state.copy(
@@ -227,7 +231,10 @@ class ChatViewModel(
                     val updated = state.messages.toMutableList()
                     val lastIdx = updated.size - 1
                     if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
-                        updated[lastIdx] = updated[lastIdx].copy(content = newStreaming)
+                        updated[lastIdx] = updated[lastIdx].copy(
+                            content = newStreaming,
+                            isStreaming = true
+                        )
                     }
                     state.copy(messages = updated, streamingContent = newStreaming)
                 }
@@ -240,7 +247,8 @@ class ChatViewModel(
                         updated[lastIdx] = updated[lastIdx].copy(
                             sources = msg.sources,
                             agentSteps = msg.agentSteps,
-                            evaluation = msg.evaluation
+                            evaluation = msg.evaluation,
+                            isStreaming = false
                         )
                     }
                     state.copy(
@@ -253,7 +261,14 @@ class ChatViewModel(
                 loadConversations()
             }
             is WsMessage.Error -> {
-                _uiState.update { it.copy(isThinking = false, error = msg.message) }
+                _uiState.update { state ->
+                    val updated = state.messages.toMutableList()
+                    val lastIdx = updated.size - 1
+                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant" && updated[lastIdx].isStreaming) {
+                        updated[lastIdx] = updated[lastIdx].copy(isStreaming = false)
+                    }
+                    state.copy(messages = updated, isThinking = false, error = msg.message)
+                }
             }
         }
     }
@@ -265,24 +280,32 @@ class ChatViewModel(
             try {
                 val response = fileRepository.list()
                 _documents.value = response.files
+                _uiState.update {
+                    it.copy(totalDocumentCount = response.files.size)
+                }
             } catch (_: Exception) { }
         }
     }
 
     fun toggleDocumentSelection(docId: Long) {
         _selectedDocIds.update { ids ->
-            if (ids.contains(docId)) ids - docId else ids + docId
+            val new = if (ids.contains(docId)) ids - docId else ids + docId
+            _uiState.update { it.copy(selectedDocCount = new.size) }
+            new
         }
     }
 
     fun selectAllDocuments() {
-        _selectedDocIds.value = _documents.value
+        val all = _documents.value
             .filter { it.status == "ready" }
             .map { it.id }
+        _selectedDocIds.value = all
+        _uiState.update { it.copy(selectedDocCount = all.size) }
     }
 
     fun clearDocumentSelection() {
         _selectedDocIds.value = emptyList()
+        _uiState.update { it.copy(selectedDocCount = 0) }
     }
 
     fun clearError() {

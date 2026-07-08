@@ -10,8 +10,8 @@
 | 工具类 (util/) | ✅ 完成 | Token、拦截器、服务器配置、错误解析 |
 | 认证 UI | ✅ 完成 | 登录、注册、客户端校验、服务器错误展示 |
 | 导航 | ✅ 完成 | Navigation Compose（登录 ↔ 注册 ↔ 聊天） |
-| 聊天骨架 | ⚠️ 部分 | 对话列表、输入框、消息发送/接收已通，缺大量 UI 组件 |
-| 知识库 UI | ❌ 未开始 | 文件上传/列表/删除、制度速览、知识卡片 |
+| 聊天骨架 | ✅ 完成 | Markdown 渲染、思考过程、来源引用、RAG 评估、文档范围栏 |
+| 知识库 UI | ❌ 未开始 | KnowledgeSheet（文件上传/列表/删除）、制度速览、知识卡片 |
 | AI 记忆 UI | ❌ 未开始 | 记忆面板、记忆设置 |
 | 个人资料编辑 | ❌ 未开始 | ProfileEditScreen |
 | 打磨 | ❌ 未开始 | 下拉刷新、长按复制、Release 签名 |
@@ -64,15 +64,22 @@
 
 ### 5. 聊天骨架 (ui/chat/)
 
-- `ChatViewModel.kt`：核心 ViewModel，管理对话列表/消息/流式状态
+- `ChatViewModel.kt`：核心 ViewModel，管理对话列表/消息/流式状态/文档范围
   - `sendMessage()` → 先尝试 WS，失败自动回退 HTTP
   - `handleWsMessage()` → 处理 Meta/Thinking/Token/Done/Error 五种消息
-  - `selectConversation()` / `deleteConversation()` / `newConversation()`
-- `ChatScreen.kt`：ModalNavigationDrawer 布局 + TopAppBar + 消息列表
-  - Welcome 欢迎页（含 6 个预设问题 AssistChip）
-  - 消息气泡（`MessageBubble` composable，但 Markdown 渲染未接入）
-- `ConversationDrawer.kt`：侧边栏对话列表 + 删除确认对话框
-- `InputBar.kt`：多行输入框 + 发送按钮
+  - `isStreaming` 标志追踪流式状态，Done/Error 后置为 false
+  - 文档计数同步到 `ChatUiState`（`totalDocumentCount` / `selectedDocCount`）
+- `ChatScreen.kt`：ModalNavigationDrawer 布局 + TopAppBar + 消息列表 + 错误 Snackbar
+  - `MessageBubble`：用户消息纯文本右对齐，assistant 流式时纯文本、完成后 Markdown（`MarkdownDocument`）
+  - 每条完成的 assistant 消息下方显示 ThinkingSteps / SourcesPanel / EvaluationPanel 可折叠面板
+  - 流式过程中显示实时思考步骤或加载指示器
+- `components/ConversationDrawer.kt`：侧边栏对话列表 + 删除确认对话框
+- `components/InputBar.kt`：多行输入框 + 发送按钮
+- `components/ThinkingSteps.kt` 🆕：可折叠 Agent 思考过程面板，含工具名中文推断和耗时
+- `components/SourcesPanel.kt` 🆕：可折叠来源引用面板，含可信度 chip 和文本预览
+- `components/EvaluationPanel.kt` 🆕：可折叠 RAG 评价面板，含 6 指标网格 + 检索/生成详情
+- `components/WelcomeCards.kt` 🆕：欢迎页 6 个预设问题 AssistChip 网格
+- `components/DocumentScopeBar.kt` 🆕：输入框上方文档范围状态栏
 
 ### 6. DI 容器 (AppContainer.kt)
 
@@ -82,65 +89,45 @@
 
 ## 待完成功能
 
-### Block 1：聊天 UI 完善（优先级：高）
+### Block 1：聊天 UI 完善（优先级：高）✅ 已完成
 
-这些功能的数据层已全部就绪，只需要写 Composable UI。
+#### 1.1 Markdown 消息渲染 ✅
 
-#### 1.1 Markdown 消息渲染
+已实现。`MessageBubble` 中对完成的 assistant 消息使用 `MarkdownDocument`（boswelja compose-markdown material3）渲染。流式过程中使用纯文本，`Done` 后切换为 Markdown，避免闪烁。
 
-**当前状态**：`MessageBubble` 中显示纯文本，`compose-markdown` 依赖已添加但未使用。
+**用到的 API**：`com.boswelja.markdown.material3.MarkdownDocument(markdown = content)`
 
-**需要做的**：
-- 在 `ChatScreen.kt` 的 `MessageBubble` composable 中，对 assistant 消息使用 `Markdown` 组件渲染
-- boswelja 库用法：`Markdown(content = message.content)`
-- 代码高亮、链接、表格等样式由库自动处理
+#### 1.2 Agent 思考过程 (ThinkingSteps) ✅
 
-**参考文件**：
-- `ui/chat/ChatScreen.kt` — `MessageBubble` composable（第 ~160 行）
-- Web 前端的 `utils/markdown.js` — 了解 markdown-it 的配置
+**文件**：`ui/chat/components/ThinkingSteps.kt`
+- 可折叠卡片，标题"Agent 思考过程 (N步)"
+- 每步显示：编号徽章、图标、工具名（中文推断）、描述、耗时
+- 支持已完成步骤（`List<AgentStepDto>`）和流式步骤（`List<AgentStepMsg>`）
+- 工具名推断函数：`inferStepTool()` — 匹配"检索/生成/分析/摘要/提取"等关键词
 
-#### 1.2 Agent 思考过程 (ThinkingSteps)
+#### 1.3 来源引用 (SourcesPanel) ✅
 
-**需要做的**：
-- 新建 `ui/chat/components/ThinkingSteps.kt`
-- 在每条 assistant 消息下方展示可折叠的"Agent 思考过程"卡片
-- 每步显示：图标 + 工具名 + 描述 + 耗时
-- 工具名推断规则（参考 Web 前端 `inferStepTool()`）：
-  - 含"检索/文档片段/知识库/匹配" → "企业知识检索"
-  - 含"生成/回答" → "回答生成"
-  - 含"分析" → "问题分析"
+**文件**：`ui/chat/components/SourcesPanel.kt`
+- 可折叠面板，标题"来源引用 (N)" + 文档数量
+- 每个 source 显示：文档名、证据 ID、来源类型、可信度 chip、相似度分数、文本预览(前150字)
 
-**数据来源**：`MessageUiItem.agentSteps: List<AgentStepDto>`
+#### 1.4 RAG 评估指标 (EvaluationPanel) ✅
 
-#### 1.3 来源引用 (SourcesPanel)
+**文件**：`ui/chat/components/EvaluationPanel.kt`
+- 可折叠面板，标题"RAG 评价指标" + 总分徽章
+- 风险等级 banner（低/中/高风险，颜色编码）
+- 6 指标网格（检索质量/证据支撑/引用覆盖/引用正确/幻觉风险/上下文重叠）
+- 检索详情（Top-K/命中/片段数/最佳相关/平均相关/文档多样性）
+- 生成详情（声明数/有支撑/无支撑/有效引用/无效引用/来源利用）
+- 备注列表
 
-**新建**：`ui/chat/components/SourcesPanel.kt`
-- 可折叠面板，标题"来源 (N)"
-- 每个 source 显示：文档名、分块编号、证据 ID、来源类型、可信度、检索分数、文本预览(前150字)
+#### 1.5 欢迎卡片 (WelcomeCards) ✅
 
-**数据来源**：`MessageUiItem.sources: List<SourceDto>`
+**文件**：`ui/chat/components/WelcomeCards.kt` — 已从 ChatScreen 提取，包含 6 个预设问题 AssistChip 的 2 列网格。
 
-#### 1.4 RAG 评估指标 (EvaluationPanel)
+#### 1.6 流式标记渲染优化 ✅
 
-**新建**：`ui/chat/components/EvaluationPanel.kt`
-- 可折叠面板，标题"RAG 评价指标"
-- 6 个指标网格（总分/检索质量/证据支撑/引用覆盖/引用正确/幻觉风险）
-- 颜色编码：绿(≥70%)/橙(40-70%)/红(<40%)，幻觉风险反向
-- 详细行和备注
-
-**数据来源**：`MessageUiItem.evaluation: EvaluationDto?`
-
-#### 1.5 欢迎卡片 (WelcomeCards)
-
-**当前**：`ChatScreen.kt` 中内联了 6 个 `AssistChip`。
-
-**建议**：提取为 `ui/chat/components/WelcomeCards.kt`，在 `ChatScreen` 中引用。
-
-#### 1.6 流式标记渲染优化
-
-**当前**：WebSocket token 到达时 `ChatViewModel` 累积 content 并更新 message。`ChatScreen` 的 `MessageBubble` 每次 recompose 时重新渲染整个 Markdown，可能闪烁。
-
-**建议**：考虑在流式过程中对最后一条消息使用纯文本渲染，`done` 后再切换到 Markdown。
+已实现。`MessageUiItem.isStreaming` 标志在流式过程中为 `true`，`Done` 后为 `false`。`MessageBubble` 根据此标志选择纯文本或 Markdown 渲染，避免 recompose 闪烁。
 
 ---
 
@@ -164,13 +151,13 @@
 - `FileApi` / `FileDtos` 已定义
 - 文件选择器：`ActivityResultContracts.GetMultipleContents()`
 
-#### 2.2 DocumentScopeBar（文档范围选择）
+#### 2.2 DocumentScopeBar（文档范围选择）✅
 
-**新建**：`ui/chat/components/DocumentScopeBar.kt`
-- 显示在输入框上方
-- 展示当前选中文档的状态：全部资料 / 已选 N 份 / 未选择
-- 点击弹出 KnowledgeSheet 进行选择
-- Checkbox 勾选逻辑已在 `ChatViewModel` 中（`toggleDocumentSelection` 等）
+**文件**：`ui/chat/components/DocumentScopeBar.kt`
+- 显示在输入框上方，展示当前文档范围状态
+- 三种状态：无文档时隐藏 / 全选时显示"全部资料 (N 份)" / 部分选择时显示"已选 N/N 份"
+- 点击可打开 KnowledgeSheet（需 Block 2.1 完成后接入）
+- 数据已通过 `ChatUiState.totalDocumentCount` / `selectedDocCount` 暴露
 
 #### 2.3 SummaryDialog（制度速览）
 

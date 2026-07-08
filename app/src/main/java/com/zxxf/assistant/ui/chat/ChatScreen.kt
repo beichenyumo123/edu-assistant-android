@@ -1,8 +1,9 @@
 package com.zxxf.assistant.ui.chat
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -11,12 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.boswelja.markdown.material3.MarkdownDocument
 import com.zxxf.assistant.AppContainer
-import com.zxxf.assistant.data.dto.SourceDto
-import com.zxxf.assistant.ui.chat.components.ConversationDrawerContent
-import com.zxxf.assistant.ui.chat.components.InputBar
+import com.zxxf.assistant.ui.chat.components.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,6 +40,7 @@ fun ChatScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Connect WebSocket on first launch
     LaunchedEffect(Unit) {
@@ -46,7 +48,7 @@ fun ChatScreen(
         chatViewModel.connectWebSocket(user.user.id)
     }
 
-    // Auto-scroll to bottom on new messages
+    // Auto-scroll to bottom on new messages or streaming content
     LaunchedEffect(uiState.messages.size, uiState.streamingContent) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
@@ -55,8 +57,11 @@ fun ChatScreen(
 
     // Error snackbar
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            // error shown inline for now
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(
+                message = error,
+                duration = SnackbarDuration.Short
+            )
             chatViewModel.clearError()
         }
     }
@@ -84,6 +89,7 @@ fun ChatScreen(
         }
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                     title = { Text("OnboardAgent") },
@@ -108,10 +114,20 @@ fun ChatScreen(
                 )
             },
             bottomBar = {
-                InputBar(
-                    isThinking = uiState.isThinking,
-                    onSend = { text -> chatViewModel.sendMessage(text) }
-                )
+                Column {
+                    // Document scope indicator above input
+                    DocumentScopeBar(
+                        totalDocumentCount = uiState.totalDocumentCount,
+                        selectedDocCount = uiState.selectedDocCount,
+                        onOpenKnowledgeSheet = {
+                            // TODO: Open KnowledgeSheet (Block 2)
+                        }
+                    )
+                    InputBar(
+                        isThinking = uiState.isThinking,
+                        onSend = { text -> chatViewModel.sendMessage(text) }
+                    )
+                }
             }
         ) { innerPadding ->
             Column(
@@ -119,13 +135,13 @@ fun ChatScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (uiState.messages.isEmpty()) {
+                if (uiState.messages.isEmpty() && !uiState.isThinking) {
                     // Welcome screen
-                    WelcomeContent(
+                    WelcomeCards(
                         onPresetClick = { question -> chatViewModel.sendMessage(question) }
                     )
                 } else {
-                    // Messages
+                    // Messages list
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -134,23 +150,49 @@ fun ChatScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.messages) { message ->
-                            MessageBubble(message = message)
+                        itemsIndexed(
+                            uiState.messages,
+                            key = { index, _ -> index }
+                        ) { index, message ->
+                            MessageBubble(
+                                message = message,
+                                showDetails = message.role == "assistant" && !message.isStreaming
+                            )
                         }
 
-                        // Thinking indicator
-                        if (uiState.isThinking && uiState.streamingContent.isEmpty()) {
-                            item {
+                        // Live thinking steps during streaming (before any tokens arrive)
+                        if (uiState.isThinking && uiState.streamingContent.isEmpty() && uiState.thinkingSteps.isNotEmpty()) {
+                            item(key = "live_thinking") {
+                                ThinkingSteps(
+                                    steps = null,
+                                    liveSteps = uiState.thinkingSteps
+                                )
+                            }
+                        }
+
+                        // Thinking indicator (spinner when no tokens yet and no steps)
+                        if (uiState.isThinking && uiState.streamingContent.isEmpty() && uiState.thinkingSteps.isEmpty()) {
+                            item(key = "thinking_indicator") {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(16.dp),
                                     contentAlignment = Alignment.CenterStart
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = "正在思考...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -161,85 +203,79 @@ fun ChatScreen(
     }
 }
 
+/**
+ * A single message bubble. For user messages: plain text, right-aligned.
+ * For assistant messages: Markdown when complete, plain text while streaming,
+ * plus ThinkingSteps / SourcesPanel / EvaluationPanel below when available.
+ */
 @Composable
-private fun WelcomeContent(onPresetClick: (String) -> Unit) {
-    val presetQuestions = listOf(
-        "入职第一周需要完成哪些事项？",
-        "试用期转正评估主要看什么？",
-        "请假和异常打卡应该怎么处理？",
-        "差旅报销需要注意哪些要求？",
-        "哪些公司数据不能外发或上传？",
-        "帮我整理新人必修培训清单"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "你好，我是入职培训助手",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "基于已上传的企业培训资料，回答入职、制度、流程、安全等问题",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.secondary
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Preset question cards (2 columns)
-        repeat(3) { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                repeat(2) { col ->
-                    val index = row * 2 + col
-                    if (index < presetQuestions.size) {
-                        AssistChip(
-                            onClick = { onPresetClick(presetQuestions[index]) },
-                            label = {
-                                Text(
-                                    text = presetQuestions[index],
-                                    maxLines = 2
-                                )
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MessageBubble(message: MessageUiItem) {
+fun MessageBubble(
+    message: MessageUiItem,
+    showDetails: Boolean = false,
+    modifier: Modifier = Modifier
+) {
     val isUser = message.role == "user"
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
+        // Content bubble
         Surface(
             color = if (isUser) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.medium
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.widthIn(max = 340.dp)
         ) {
-            Text(
-                text = message.content.ifEmpty { "..." },
-                modifier = Modifier.padding(12.dp),
-                color = if (isUser) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurface
+            if (isUser) {
+                // User messages: plain text only
+                Text(
+                    text = message.content.ifEmpty { "..." },
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else if (message.isStreaming) {
+                // Streaming: plain text (avoid Markdown re-render flicker)
+                Text(
+                    text = message.content.ifEmpty { "..." },
+                    modifier = Modifier.padding(12.dp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            } else {
+                // Completed assistant message: render Markdown
+                Column(modifier = Modifier.padding(12.dp)) {
+                    MarkdownDocument(
+                        markdown = message.content.ifEmpty { "..." },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // Details panels (only for completed assistant messages)
+        if (showDetails) {
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Thinking steps
+            ThinkingSteps(
+                steps = message.agentSteps,
+                modifier = Modifier.widthIn(max = 340.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Source citations
+            SourcesPanel(
+                sources = message.sources,
+                modifier = Modifier.widthIn(max = 340.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // RAG evaluation
+            EvaluationPanel(
+                evaluation = message.evaluation,
+                modifier = Modifier.widthIn(max = 340.dp)
             )
         }
     }
