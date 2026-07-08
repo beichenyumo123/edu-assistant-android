@@ -1,8 +1,6 @@
 package com.zxxf.assistant.ui.navigation
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -28,6 +26,7 @@ fun AppNavGraph(
         factory = AuthViewModel.Factory(appContainer.authRepository)
     )
     val authState by authViewModel.uiState.collectAsState()
+    var serverUrl by remember { mutableStateOf(appContainer.serverConfig.serverUrl) }
 
     // Determine start destination based on login state
     val startDestination = if (appContainer.authRepository.isLoggedIn()) {
@@ -43,14 +42,20 @@ fun AppNavGraph(
         composable(Routes.LOGIN) {
             LoginScreen(
                 uiState = authState,
+                serverUrl = serverUrl,
                 onLogin = { username, password ->
+                    appContainer.baseUrl = serverUrl
                     authViewModel.login(username, password)
                 },
                 onNavigateToRegister = {
                     authViewModel.clearError()
                     navController.navigate(Routes.REGISTER)
                 },
-                onClearError = { authViewModel.clearError() }
+                onClearError = { authViewModel.clearError() },
+                onUpdateServerUrl = {
+                    serverUrl = it
+                    appContainer.baseUrl = it  // persist immediately
+                }
             )
 
             // Navigate to chat when logged in
@@ -65,6 +70,7 @@ fun AppNavGraph(
             RegisterScreen(
                 uiState = authState,
                 onRegister = { username, email, password, grade, major ->
+                    appContainer.baseUrl = serverUrl
                     authViewModel.register(username, email, password, grade, major)
                 },
                 onNavigateBack = {

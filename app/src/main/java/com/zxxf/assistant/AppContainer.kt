@@ -4,6 +4,7 @@ import android.content.Context
 import com.zxxf.assistant.data.api.*
 import com.zxxf.assistant.data.repository.*
 import com.zxxf.assistant.util.AuthInterceptor
+import com.zxxf.assistant.util.ServerConfig
 import com.zxxf.assistant.util.TokenManager
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -14,6 +15,7 @@ import java.util.concurrent.TimeUnit
 class AppContainer(context: Context) {
 
     val tokenManager = TokenManager(context)
+    val serverConfig = ServerConfig(context)
 
     // ── OkHttp ──
 
@@ -25,17 +27,27 @@ class AppContainer(context: Context) {
         .addInterceptor(AuthInterceptor(tokenManager))
         .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)  // RAG answers can be slow
+        .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     // ── Retrofit ──
 
-    var baseUrl: String = DEFAULT_BASE_URL
+    var baseUrl: String
+        get() = serverConfig.serverUrl
+        set(value) {
+            serverConfig.serverUrl = if (value.endsWith("/")) value else "$value/"
+        }
+
+    private val normalizedBaseUrl: String
+        get() {
+            val url = baseUrl
+            return if (url.endsWith("/")) url else "$url/"
+        }
 
     private val retrofit: Retrofit
         get() = Retrofit.Builder()
-            .baseUrl(baseUrl)
+            .baseUrl(normalizedBaseUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -59,9 +71,6 @@ class AppContainer(context: Context) {
     val chatRepository: ChatRepository get() = ChatRepository(chatApi, baseUrl, tokenManager)
 
     companion object {
-        // Android emulator -> host machine
         const val EMULATOR_BASE_URL = "http://10.0.2.2:8000"
-        // Default: same as emulator (change for real device / production)
-        const val DEFAULT_BASE_URL = EMULATOR_BASE_URL
     }
 }

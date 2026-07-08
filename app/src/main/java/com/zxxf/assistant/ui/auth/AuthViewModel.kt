@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zxxf.assistant.data.dto.UserDto
 import com.zxxf.assistant.data.repository.AuthRepository
+import com.zxxf.assistant.util.ErrorParser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,12 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
     }
 
     fun login(username: String, password: String) {
+        // Client-side validation
+        if (username.isBlank() || password.isBlank()) {
+            _uiState.value = _uiState.value.copy(error = "请填写用户名和密码")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
@@ -41,7 +48,7 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "登录失败"
+                    error = ErrorParser.parse(e)
                 )
             }
         }
@@ -54,6 +61,20 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         grade: String?,
         major: String?
     ) {
+        // Client-side validation matching backend requirements
+        if (username.length < 3) {
+            _uiState.value = _uiState.value.copy(error = "用户名至少3个字符")
+            return
+        }
+        if (email.isBlank() || !email.contains("@")) {
+            _uiState.value = _uiState.value.copy(error = "请输入有效的邮箱地址")
+            return
+        }
+        if (password.length < 6) {
+            _uiState.value = _uiState.value.copy(error = "密码至少6位")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
@@ -66,7 +87,7 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "注册失败"
+                    error = ErrorParser.parse(e)
                 )
             }
         }
