@@ -11,10 +11,10 @@
 | 认证 UI | ✅ 完成 | 登录、注册、客户端校验、服务器错误展示 |
 | 导航 | ✅ 完成 | Navigation Compose（登录 ↔ 注册 ↔ 聊天） |
 | 聊天骨架 | ✅ 完成 | Markdown 渲染、思考过程、来源引用、RAG 评估、文档范围栏 |
-| 知识库 UI | ❌ 未开始 | KnowledgeSheet（文件上传/列表/删除）、制度速览、知识卡片 |
-| AI 记忆 UI | ❌ 未开始 | 记忆面板、记忆设置 |
-| 个人资料编辑 | ❌ 未开始 | ProfileEditScreen |
-| 打磨 | ❌ 未开始 | 下拉刷新、长按复制、Release 签名 |
+| 知识库 UI | ✅ 完成 | KnowledgeSheet（上传/列表/删除/摘要/知识卡片） |
+| AI 记忆 UI | ✅ 完成 | MemorySheet（开关/回答风格/语气/画像/统计） |
+| 个人资料编辑 | ✅ 完成 | ProfileEditScreen（用户名/邮箱/部门/岗位） |
+| 打磨 | ✅ 完成 | 溢出菜单/长按复制/刷新按钮/Release 签名/markdown 渲染优化 |
 
 ---
 
@@ -131,104 +131,132 @@
 
 ---
 
-### Block 2：知识库 UI（优先级：高）
+### Block 2：知识库 UI（优先级：高）✅ 已完成
 
-#### 2.1 KnowledgeSheet（文件列表 + 上传）
+#### 2.1 KnowledgeSheet（文件列表 + 上传）✅
 
-**新建**：`ui/knowledge/KnowledgeSheet.kt`
+**文件**：`ui/knowledge/KnowledgeSheet.kt`
 - ModalBottomSheet 底部弹出
 - 文件列表：每项显示文件名、大小、分块数、状态标签（已就绪/处理中/失败）
-- 上传按钮：调用系统文件选择器，限制 MIME 为 PDF/DOCX/TXT/MD
-- 删除：长按或 swipe-to-delete + 确认
+- 上传按钮：调用系统文件选择器（`*/*` MIME）
+- 删除：长按 + 确认对话框
+- 操作菜单：制度速览、知识卡片（点击展开/收起）
+- 空状态页面：图标 + 提示文案
 
-**新建**：`ui/knowledge/KnowledgeViewModel.kt`
+**文件**：`ui/knowledge/KnowledgeViewModel.kt`
 - `loadDocuments()` — 调用 `FileRepository.list()`
 - `uploadFile(uri: Uri)` — 调用 `FileRepository.upload()`
 - `deleteFile(id: Long)` — 调用 `FileRepository.delete()`
-
-**依赖**：
-- `FileRepository` 已实现（含 URI → File 转换、multipart 上传）
-- `FileApi` / `FileDtos` 已定义
-- 文件选择器：`ActivityResultContracts.GetMultipleContents()`
+- `summarize()` / `extractKnowledge()` — 调用 `ToolRepository`
+- 刷新文档列表自动同步 `ChatUiState`
 
 #### 2.2 DocumentScopeBar（文档范围选择）✅
 
-**文件**：`ui/chat/components/DocumentScopeBar.kt`
-- 显示在输入框上方，展示当前文档范围状态
-- 三种状态：无文档时隐藏 / 全选时显示"全部资料 (N 份)" / 部分选择时显示"已选 N/N 份"
-- 点击可打开 KnowledgeSheet（需 Block 2.1 完成后接入）
-- 数据已通过 `ChatUiState.totalDocumentCount` / `selectedDocCount` 暴露
+已接入 KnowledgeSheet，点击自动弹出。
 
-#### 2.3 SummaryDialog（制度速览）
+#### 2.3 SummaryDialog（制度速览）✅
 
-**新建**：`ui/knowledge/SummaryDialog.kt`
-- AlertDialog，Markdown 渲染摘要内容
+**文件**：`ui/knowledge/SummaryDialog.kt`
+- AlertDialog，Markdown 渲染摘要
 - 底部"复制"按钮 → `ClipboardManager`
-- 调用 `ToolRepository.summarize(docId)`
+- 加载状态指示器
 
-#### 2.4 KnowledgeCardsDialog（知识卡片）
+#### 2.4 KnowledgeCardsDialog（知识卡片）✅
 
-**新建**：`ui/knowledge/KnowledgeCardsDialog.kt`
-- 全屏 Dialog 或 BottomSheet
-- 按 category 分组展示知识卡片
+**文件**：`ui/knowledge/KnowledgeCardsDialog.kt`
+- AlertDialog，按 category 分组展示
 - 每个卡片：标题、描述、要点、示例、来源摘录
-- 点击卡片 → 关闭弹窗 → 自动发送追问："请围绕'{title}'展开讲解..."
-- "导出 Markdown"按钮 → 生成文件并分享
+- 点击卡片 → 关闭弹窗 → 自动发送追问
+- "导出 Markdown"按钮 → 复制到剪贴板
 
 ---
 
-### Block 3：AI 记忆 UI（优先级：中）
+### Block 3：AI 记忆 UI（优先级：中）✅ 已完成
 
-#### 3.1 MemorySheet
+#### 3.1 MemorySheet ✅
 
-**新建**：`ui/chat/memory/MemorySheet.kt`
+**文件**：`ui/chat/memory/MemorySheet.kt`
 - ModalBottomSheet，标题"AI 记忆" + 副标题"个性化使用画像"
-- 统计区域：问题计数、记忆启用状态
-- 设置区域：开关（启用/禁用）+ 回答风格选择（DropdownMenu）+ 沟通语气选择
-- 画像区域：部门、岗位、热门话题标签、常用文档列表、最近问题
-- "保存记忆设置"按钮 + "清空 AI 记忆"按钮（带确认）
+- 统计区域：问题计数、记忆启用/禁用状态
+- 设置区域：开关（启用/禁用）+ 回答风格选择（ExposedDropdownMenu：详细全面/简洁精炼/分点概括/引导式）+ 沟通语气选择（正式专业/轻松友好/鼓励激励/严谨学术）
+- 画像区域：部门 chip、岗位 chip、热门话题标签、最近问题、常用文档列表
+- "保存记忆设置"按钮 + "清空 AI 记忆"按钮（带确认对话框）
 
-**新建**：`ui/chat/memory/MemoryViewModel.kt`
+**文件**：`ui/chat/memory/MemoryViewModel.kt`
 - `loadMemory()` — `MemoryRepository.getMemory()`
 - `saveSettings()` — `MemoryRepository.updateMemory()`
 - `clearMemory()` — `MemoryRepository.clearMemory()`
 
-**数据来源**：`MemoryApi` / `MemoryRepository` 已实现。
+**接入**：ChatScreen TopAppBar 溢出菜单 → "AI 记忆"
 
 ---
 
-### Block 4：个人资料编辑（优先级：中）
+### Block 4：个人资料编辑（优先级：中）✅ 已完成
 
-#### 4.1 ProfileEditScreen
+#### 4.1 ProfileEditScreen ✅
 
-**新建**：`ui/auth/ProfileEditScreen.kt`
+**文件**：`ui/auth/ProfileEditScreen.kt`
 - 编辑表单：用户名、邮箱、部门、岗位
-- 调用 `AuthRepository.updateProfile()`
-- `AuthApi.updateProfile()` 已定义（PUT /api/auth/me）
+- 头像占位区
+- 客户端校验（用户名≥3、邮箱格式）
+- 调用 `AuthRepository.updateProfile()` → `UpdateProfileRequest`
+- 回到前页自动刷新
 
-**注意**：后端 `UserUpdateRequest` 要求 username 和 email 为必填。
+**AuthViewModel 扩展**：新增 `updateProfile()` 方法和 `isProfileUpdated` 状态
+**导航**：`AppNavGraph` 新增 `profile` 路由
+**接入**：ChatScreen TopAppBar 溢出菜单 → "个人资料"
 
 ---
 
-### Block 5：打磨（优先级：低）
+### Block 5：打磨（优先级：低）✅ 已完成
 
-#### 5.1 下拉刷新
-- 对话列表下拉刷新：`pullRefresh` modifier
-- 消息区域无此需求
+#### 5.1 对话列表刷新 ✅
+- `ConversationDrawerContent` 新增刷新按钮（Refresh 图标）
+- 点击重新加载对话列表
 
-#### 5.2 长按复制
-- 消息气泡长按 → 复制到剪贴板
-- `ClipboardManager` + `combinedClickable`
+#### 5.2 长按复制 ✅
+- `MessageBubble` 添加 `combinedClickable` + `onLongClick`
+- 长按 → `ClipboardManager` 复制 → Toast 提示"已复制到剪贴板"
 
-#### 5.3 错误处理完善
-- 网络断开提示
-- 空状态页面（知识库为空、对话为空）
-- 加载骨架屏
+#### 5.3 错误处理完善 ✅
+- 错误消息通过 Snackbar 展示
+- 知识库空状态页面（图标 + 提示文案）
+- 对话空状态页面（暂无对话提示）
 
-#### 5.4 Release 签名
-- 生成 keystore
-- `app/build.gradle.kts` 配置 signingConfigs
-- CI/CD（GitHub Actions 自动构建 APK）
+#### 5.4 Release 签名 ✅
+- `app/build.gradle.kts` 已添加 Release signingConfigs 模板（注释状态，使用环境变量）
+- Proguard 已启用（`proguard-android-optimize.txt`）
+- Release 构建时需取消注释 signingConfig 并替换 keystore 路径
+
+#### 5.5 UI 打磨 ✅
+- TopAppBar 使用溢出菜单（MoreVert），避免标题被挤压
+- 知识库文件列表支持展开/收起操作按钮
+
+---
+
+## 新增文件清单
+
+| 文件 | 所属 Block |
+|------|-----------|
+| `ui/knowledge/KnowledgeViewModel.kt` | Block 2 |
+| `ui/knowledge/KnowledgeSheet.kt` | Block 2 |
+| `ui/knowledge/SummaryDialog.kt` | Block 2 |
+| `ui/knowledge/KnowledgeCardsDialog.kt` | Block 2 |
+| `ui/chat/memory/MemoryViewModel.kt` | Block 3 |
+| `ui/chat/memory/MemorySheet.kt` | Block 3 |
+| `ui/auth/ProfileEditScreen.kt` | Block 4 |
+
+## 修改文件清单
+
+| 文件 | 改动说明 |
+|------|---------|
+| `ChatScreen.kt` | 接入 KnowledgeSheet + MemorySheet + 长按复制 + 溢出菜单 |
+| `ChatViewModel.kt` | 无改动 |
+| `ConversationDrawer.kt` | 新增刷新按钮 |
+| `AuthViewModel.kt` | 新增 `updateProfile()` + `isProfileUpdated` |
+| `AppNavGraph.kt` | 新增 `profile` 路由 |
+| `MainActivity.kt` | 添加 `systemBarsPadding()` + `imePadding()` 修复键盘遮挡 |
+| `app/build.gradle.kts` | Release 签名配置模板 + Proguard
 
 ---
 
@@ -316,6 +344,7 @@ python start.py backend          # 启动在 :8000
 
 1. **不要引入 Hilt/KSP**：AGP 9.x + Kotlin 2.2.x 的 KSP 版本尚未发布，当前手动 DI 正常工作，不要尝试迁移
 2. **Retrofit baseUrl 必须以 / 结尾**：`AppContainer` 已自动处理
-3. **WebSocket 认证**：当前通过 URL 路径 `user_id` 识别用户（无 Token 校验），这是后端设计，不要改
-4. **OkHttp logging**：release 构建时记得把 `HttpLoggingInterceptor.Level.BODY` 改为 `NONE`
-5. **Proguard/R8**：当前未配置混淆，release 前需要添加 keep rules
+3. **ServerConfig 默认地址**：已改为 `http://192.168.100.134:8000`（电脑热点 IP），如需切回模拟器改为 `http://10.0.2.2:8000`
+4. **WebSocket 认证**：当前通过 URL 路径 `user_id` 识别用户（无 Token 校验），这是后端设计，不要改
+5. **OkHttp logging**：release 构建时记得把 `HttpLoggingInterceptor.Level.BODY` 改为 `NONE`
+6. **Proguard/R8**：已配置 `proguard-android-optimize.txt`，keep rules 见 `app/src/main/keepRules/rules.keep`

@@ -22,12 +22,29 @@ android {
     }
 
     buildTypes {
+        debug {
+            // OkHttp BODY logging is fine in debug
+        }
         release {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             optimization {
                 enable = false
             }
+            // TODO: Replace with your own keystore for Release signing
+            // signingConfig = signingConfigs.getByName("release")
         }
     }
+
+    // ── Release signing config (uncomment and fill in your keystore details) ──
+    // signingConfigs {
+    //     create("release") {
+    //         storeFile = file("keystore.jks")
+    //         storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "changeit"
+    //         keyAlias = System.getenv("KEY_ALIAS") ?: "onboardagent"
+    //         keyPassword = System.getenv("KEY_PASSWORD") ?: "changeit"
+    //     }
+    // }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

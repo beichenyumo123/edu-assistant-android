@@ -4,6 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.zxxf.assistant.ui.navigation.AppNavGraph
 import com.zxxf.assistant.ui.theme.AssistantTheme
@@ -18,16 +22,20 @@ class MainActivity : ComponentActivity() {
 
         appContainer = AppContainer(applicationContext)
 
-        // Set base URL from shared prefs or intent (for production)
-        // appContainer.baseUrl = "https://your-server.com"
-
         setContent {
             AssistantTheme {
-                val navController = rememberNavController()
-                AppNavGraph(
-                    navController = navController,
-                    appContainer = appContainer
-                )
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .systemBarsPadding()
+                        .imePadding()
+                ) {
+                    val navController = rememberNavController()
+                    AppNavGraph(
+                        navController = navController,
+                        appContainer = appContainer
+                    )
+                }
             }
         }
     }

@@ -17,6 +17,6 @@ class ServerConfig(context: Context) {
     companion object {
         private const val PREFS_NAME = "server_config"
         private const val KEY_SERVER_URL = "server_url"
-        const val DEFAULT_URL = "http://10.0.2.2:8000"
+        const val DEFAULT_URL = "http://192.168.100.134:8000"
     }
 }

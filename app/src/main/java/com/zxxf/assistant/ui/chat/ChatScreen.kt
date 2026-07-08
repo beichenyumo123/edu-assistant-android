@@ -1,29 +1,42 @@
 package com.zxxf.assistant.ui.chat
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.boswelja.markdown.material3.MarkdownDocument
 import com.zxxf.assistant.AppContainer
 import com.zxxf.assistant.ui.chat.components.*
+import com.zxxf.assistant.ui.chat.memory.MemorySheet
+import com.zxxf.assistant.ui.knowledge.KnowledgeSheet
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     appContainer: AppContainer,
+    onNavigateToProfile: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val chatViewModel: ChatViewModel = viewModel(
@@ -41,6 +54,8 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showKnowledgeSheet by remember { mutableStateOf(false) }
+    var showMemorySheet by remember { mutableStateOf(false) }
 
     // Connect WebSocket on first launch
     LaunchedEffect(Unit) {
@@ -83,7 +98,8 @@ fun ChatScreen(
                     },
                     onDeleteConversation = { id ->
                         chatViewModel.deleteConversation(id)
-                    }
+                    },
+                    onRefresh = { chatViewModel.loadConversations() }
                 )
             }
         }
@@ -104,10 +120,43 @@ fun ChatScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = onLogout) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = "退出登录"
+                        var menuExpanded by remember { mutableStateOf(false) }
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("个人资料") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onNavigateToProfile()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Person, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("AI 记忆") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showMemorySheet = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Memory, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("退出登录") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onLogout()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                                }
                             )
                         }
                     }
@@ -119,9 +168,7 @@ fun ChatScreen(
                     DocumentScopeBar(
                         totalDocumentCount = uiState.totalDocumentCount,
                         selectedDocCount = uiState.selectedDocCount,
-                        onOpenKnowledgeSheet = {
-                            // TODO: Open KnowledgeSheet (Block 2)
-                        }
+                        onOpenKnowledgeSheet = { showKnowledgeSheet = true }
                     )
                     InputBar(
                         isThinking = uiState.isThinking,
@@ -201,6 +248,29 @@ fun ChatScreen(
             }
         }
     }
+
+    // KnowledgeSheet
+    if (showKnowledgeSheet) {
+        KnowledgeSheet(
+            fileRepository = appContainer.fileRepository,
+            toolRepository = appContainer.toolRepository,
+            onDismiss = {
+                showKnowledgeSheet = false
+                chatViewModel.loadDocuments()
+            },
+            onAskQuestion = { question ->
+                chatViewModel.sendMessage(question)
+            }
+        )
+    }
+
+    // MemorySheet
+    if (showMemorySheet) {
+        MemorySheet(
+            memoryRepository = appContainer.memoryRepository,
+            onDismiss = { showMemorySheet = false }
+        )
+    }
 }
 
 /**
@@ -208,6 +278,7 @@ fun ChatScreen(
  * For assistant messages: Markdown when complete, plain text while streaming,
  * plus ThinkingSteps / SourcesPanel / EvaluationPanel below when available.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: MessageUiItem,
@@ -215,17 +286,27 @@ fun MessageBubble(
     modifier: Modifier = Modifier
 ) {
     val isUser = message.role == "user"
+    val context = LocalContext.current
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        // Content bubble
+        // Content bubble with long-press to copy
         Surface(
             color = if (isUser) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.widthIn(max = 340.dp)
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .combinedClickable(
+                    onClick = { },
+                    onLongClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("message", message.content))
+                        Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                    }
+                )
         ) {
             if (isUser) {
                 // User messages: plain text only

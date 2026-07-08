@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import com.zxxf.assistant.AppContainer
 import com.zxxf.assistant.ui.auth.AuthViewModel
 import com.zxxf.assistant.ui.auth.LoginScreen
+import com.zxxf.assistant.ui.auth.ProfileEditScreen
 import com.zxxf.assistant.ui.auth.RegisterScreen
 import com.zxxf.assistant.ui.chat.ChatScreen
 
@@ -15,6 +16,7 @@ object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
     const val CHAT = "chat"
+    const val PROFILE = "profile"
 }
 
 @Composable
@@ -87,9 +89,20 @@ fun AppNavGraph(
             }
         }
 
+        composable(Routes.PROFILE) {
+            ProfileEditScreen(
+                authRepository = appContainer.authRepository,
+                onNavigateBack = { navController.popBackStack() },
+                onProfileUpdated = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
         composable(Routes.CHAT) {
             ChatScreen(
                 appContainer = appContainer,
+                onNavigateToProfile = { navController.navigate(Routes.PROFILE) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Routes.LOGIN) {

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class AuthUiState(
     val isLoading: Boolean = false,
     val isLoggedIn: Boolean = false,
+    val isProfileUpdated: Boolean = false,
     val user: UserDto? = null,
     val error: String? = null
 )
@@ -114,13 +115,48 @@ class AuthViewModel(private val authRepository: AuthRepository) : ViewModel() {
         }
     }
 
+    fun updateProfile(
+        username: String?,
+        email: String?,
+        grade: String?,
+        major: String?
+    ) {
+        if (username != null && username.length < 3) {
+            _uiState.value = _uiState.value.copy(error = "用户名至少3个字符")
+            return
+        }
+        if (email != null && (email.isBlank() || !email.contains("@"))) {
+            _uiState.value = _uiState.value.copy(error = "请输入有效的邮箱地址")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                val response = authRepository.updateProfile(
+                    com.zxxf.assistant.data.dto.UpdateProfileRequest(username, email, grade, major)
+                )
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isProfileUpdated = true,
+                    user = response.user
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = ErrorParser.parse(e)
+                )
+            }
+        }
+    }
+
     fun logout() {
         authRepository.logout()
         _uiState.value = AuthUiState()
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.value = _uiState.value.copy(error = null, isProfileUpdated = false)
     }
 
     class Factory(private val authRepository: AuthRepository) : ViewModelProvider.Factory {

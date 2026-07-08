@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,9 +22,11 @@ import com.zxxf.assistant.data.dto.ConversationDto
 fun ConversationDrawerContent(
     conversations: List<ConversationDto>,
     currentConversationId: Long?,
+    isLoading: Boolean = false,
     onNewConversation: () -> Unit,
     onSelectConversation: (Long) -> Unit,
     onDeleteConversation: (Long) -> Unit,
+    onRefresh: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var deleteConfirmId by remember { mutableStateOf<Long?>(null) }
@@ -43,8 +46,15 @@ fun ConversationDrawerContent(
                     fontWeight = FontWeight.Bold
                 )
             )
-            IconButton(onClick = onNewConversation) {
-                Icon(Icons.Filled.Add, contentDescription = "新对话")
+            Row {
+                onRefresh?.let { refreshAction ->
+                    IconButton(onClick = refreshAction) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                    }
+                }
+                IconButton(onClick = onNewConversation) {
+                    Icon(Icons.Filled.Add, contentDescription = "新对话")
+                }
             }
         }
 
