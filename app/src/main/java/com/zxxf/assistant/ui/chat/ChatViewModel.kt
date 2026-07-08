@@ -1,0 +1,307 @@
+package com.zxxf.assistant.ui.chat
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import com.zxxf.assistant.data.dto.*
+import com.zxxf.assistant.data.repository.*
+import com.zxxf.assistant.data.websocket.WsMessage
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
+data class ChatUiState(
+    val conversations: List<ConversationDto> = emptyList(),
+    val currentConversationId: Long? = null,
+    val messages: List<MessageUiItem> = emptyList(),
+    val isThinking: Boolean = false,
+    val thinkingSteps: List<AgentStepMsg> = emptyList(),
+    val streamingContent: String = "",
+    val error: String? = null
+)
+
+data class MessageUiItem(
+    val id: Long? = null,
+    val role: String,  // "user" or "assistant"
+    val content: String,
+    val sources: List<SourceDto>? = null,
+    val agentSteps: List<AgentStepDto>? = null,
+    val evaluation: EvaluationDto? = null
+)
+
+data class AgentStepMsg(
+    val text: String,
+    val toolName: String? = null,
+    val elapsedMs: Long? = null
+)
+
+class ChatViewModel(
+    private val chatRepository: ChatRepository,
+    private val conversationRepository: ConversationRepository,
+    private val fileRepository: FileRepository,
+    private val toolRepository: ToolRepository,
+    private val memoryRepository: MemoryRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    // Knowledge base
+    private val _documents = MutableStateFlow<List<DocumentDto>>(emptyList())
+    val documents: StateFlow<List<DocumentDto>> = _documents.asStateFlow()
+
+    private val _selectedDocIds = MutableStateFlow<List<Long>>(emptyList())
+    val selectedDocIds: StateFlow<List<Long>> = _selectedDocIds.asStateFlow()
+
+    init {
+        loadConversations()
+        loadDocuments()
+    }
+
+    fun connectWebSocket(userId: Int) {
+        viewModelScope.launch {
+            chatRepository.connectWebSocket(userId).collect { wsMessage ->
+                handleWsMessage(wsMessage)
+            }
+        }
+    }
+
+    fun disconnectWebSocket() {
+        chatRepository.disconnectWebSocket()
+    }
+
+    // ── Conversation management ──
+
+    fun loadConversations() {
+        viewModelScope.launch {
+            try {
+                val response = conversationRepository.list()
+                _uiState.update { it.copy(conversations = response.conversations) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "加载对话列表失败") }
+            }
+        }
+    }
+
+    fun selectConversation(conversationId: Long) {
+        viewModelScope.launch {
+            try {
+                val response = conversationRepository.get(conversationId)
+                val messages = response.messages.mapIndexed { idx, msg ->
+                    MessageUiItem(
+                        id = idx.toLong(),
+                        role = msg.role,
+                        content = msg.content,
+                        sources = msg.sources,
+                        agentSteps = msg.agentSteps,
+                        evaluation = msg.evaluation
+                    )
+                }
+                _uiState.update {
+                    it.copy(
+                        currentConversationId = conversationId,
+                        messages = messages
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "加载对话失败") }
+            }
+        }
+    }
+
+    fun deleteConversation(conversationId: Long) {
+        viewModelScope.launch {
+            try {
+                conversationRepository.delete(conversationId)
+                if (_uiState.value.currentConversationId == conversationId) {
+                    newConversation()
+                }
+                loadConversations()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "删除对话失败") }
+            }
+        }
+    }
+
+    fun newConversation() {
+        _uiState.update {
+            it.copy(
+                currentConversationId = null,
+                messages = emptyList(),
+                thinkingSteps = emptyList(),
+                streamingContent = "",
+                isThinking = false
+            )
+        }
+    }
+
+    // ── Send message ──
+
+    fun sendMessage(text: String) {
+        val convId = _uiState.value.currentConversationId
+        val docIds = _selectedDocIds.value.ifEmpty { null }
+
+        // Add user message
+        val userMsg = MessageUiItem(role = "user", content = text)
+        // Add empty assistant placeholder
+        val assistantMsg = MessageUiItem(role = "assistant", content = "")
+
+        _uiState.update {
+            it.copy(
+                messages = it.messages + userMsg + assistantMsg,
+                isThinking = true,
+                thinkingSteps = emptyList(),
+                streamingContent = "",
+                error = null
+            )
+        }
+
+        viewModelScope.launch {
+            // Try WebSocket first
+            val wsSent = chatRepository.sendViaWebSocket(text, convId, docIds)
+
+            if (!wsSent) {
+                // HTTP fallback
+                try {
+                    val response = chatRepository.sendViaHttp(text, convId, docIds)
+                    val lastIdx = _uiState.value.messages.size - 1
+                    _uiState.update { state ->
+                        val updated = state.messages.toMutableList()
+                        if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
+                            updated[lastIdx] = MessageUiItem(
+                                role = "assistant",
+                                content = response.message.content,
+                                sources = response.message.sources,
+                                agentSteps = response.agentSteps,
+                                evaluation = response.evaluation
+                            )
+                        }
+                        state.copy(
+                            messages = updated,
+                            isThinking = false,
+                            currentConversationId = response.conversationId
+                        )
+                    }
+                    loadConversations()
+                } catch (e: Exception) {
+                    _uiState.update { state ->
+                        val updated = state.messages.toMutableList()
+                        // Remove the empty assistant placeholder
+                        if (updated.isNotEmpty() && updated.last().role == "assistant" && updated.last().content.isEmpty()) {
+                            updated.removeLast()
+                        }
+                        state.copy(
+                            messages = updated,
+                            isThinking = false,
+                            error = e.message ?: "消息发送失败"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ── WebSocket message handler ──
+
+    private fun handleWsMessage(msg: WsMessage) {
+        when (msg) {
+            is WsMessage.Meta -> {
+                _uiState.update {
+                    if (it.currentConversationId == null && msg.conversationId > 0) {
+                        it.copy(currentConversationId = msg.conversationId)
+                    } else it
+                }
+            }
+            is WsMessage.Thinking -> {
+                val step = AgentStepMsg(
+                    text = msg.text ?: msg.step ?: "",
+                    toolName = msg.toolName,
+                    elapsedMs = msg.elapsedMs
+                )
+                _uiState.update {
+                    it.copy(thinkingSteps = it.thinkingSteps + step)
+                }
+            }
+            is WsMessage.Token -> {
+                _uiState.update { state ->
+                    val newStreaming = state.streamingContent + msg.content
+                    val updated = state.messages.toMutableList()
+                    val lastIdx = updated.size - 1
+                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
+                        updated[lastIdx] = updated[lastIdx].copy(content = newStreaming)
+                    }
+                    state.copy(messages = updated, streamingContent = newStreaming)
+                }
+            }
+            is WsMessage.Done -> {
+                _uiState.update { state ->
+                    val updated = state.messages.toMutableList()
+                    val lastIdx = updated.size - 1
+                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
+                        updated[lastIdx] = updated[lastIdx].copy(
+                            sources = msg.sources,
+                            agentSteps = msg.agentSteps,
+                            evaluation = msg.evaluation
+                        )
+                    }
+                    state.copy(
+                        messages = updated,
+                        isThinking = false,
+                        streamingContent = "",
+                        thinkingSteps = emptyList()
+                    )
+                }
+                loadConversations()
+            }
+            is WsMessage.Error -> {
+                _uiState.update { it.copy(isThinking = false, error = msg.message) }
+            }
+        }
+    }
+
+    // ── Knowledge base ──
+
+    fun loadDocuments() {
+        viewModelScope.launch {
+            try {
+                val response = fileRepository.list()
+                _documents.value = response.files
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun toggleDocumentSelection(docId: Long) {
+        _selectedDocIds.update { ids ->
+            if (ids.contains(docId)) ids - docId else ids + docId
+        }
+    }
+
+    fun selectAllDocuments() {
+        _selectedDocIds.value = _documents.value
+            .filter { it.status == "ready" }
+            .map { it.id }
+    }
+
+    fun clearDocumentSelection() {
+        _selectedDocIds.value = emptyList()
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    class Factory(
+        private val chatRepository: ChatRepository,
+        private val conversationRepository: ConversationRepository,
+        private val fileRepository: FileRepository,
+        private val toolRepository: ToolRepository,
+        private val memoryRepository: MemoryRepository
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return ChatViewModel(
+                chatRepository, conversationRepository, fileRepository,
+                toolRepository, memoryRepository
+            ) as T
+        }
+    }
+}
