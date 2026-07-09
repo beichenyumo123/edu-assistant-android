@@ -400,7 +400,8 @@ fun MessageBubble(
                     Markdown(
                         content = message.content.ifEmpty { "..." },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = markdownColor(codeBackground = Surface0)
+                        colors = markdownColor(codeBackground = Surface0),
+                        components = catppuccinMarkdownComponents
                     )
                 }
             }

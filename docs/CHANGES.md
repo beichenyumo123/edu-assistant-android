@@ -143,6 +143,39 @@
 - 外边距 `horizontal=12.dp, vertical=8.dp`（悬浮间距），内边距 `12.dp`
 - InputBar 背景透明化后完美融入容器，无双重边框/阴影
 
+### 6. Markdown 表格 — 滚动卡顿修复 + 边框增强
+
+**类型**：性能优化 + UI 优化
+
+**文件**：
+- `ui/chat/components/MarkdownComponents.kt`
+- `ui/chat/ChatScreen.kt`
+- `ui/knowledge/SummaryDialog.kt`
+
+**说明**：
+
+**6a. 根因分析**
+- mikepenz 0.38.0 默认 `MarkdownTable` 使用 `BoxWithConstraints` + `horizontalScroll`，当表格超过容器宽度（`tableCellWidth=160dp`，3 列 = 480dp > 气泡 340dp）时触发水平滚动
+- `BoxWithConstraints` 产生子组合测量开销，`horizontalScroll` 与 `LazyColumn` 垂直滚动产生嵌套滚动冲突，导致卡顿
+- 默认表格无单元格边框，仅依赖 `tableBackground`（alpha=0.02f），视觉上不明显
+
+**6b. 自定义表格实现**
+- 重写 `MarkdownComponents.kt`，提供 `catppuccinMarkdownComponents` 全局单例
+- 自定义 `CatppuccinMarkdownTable` composable：
+  - 去除 `BoxWithConstraints` + `horizontalScroll`，改用 `Column(Modifier.fillMaxWidth())`
+  - 单元格 `Modifier.weight(1f)` 均匀分布宽度，无水平滚动条
+  - 单元格 `border(0.5.dp, Surface1)` 可见边框
+  - 表头 `Surface0` 背景 + 粗体
+  - 外层 `RoundedCornerShape(8.dp)` 圆角边框 + `clip`
+  - 使用 `buildMarkdownAnnotatedString` + `MarkdownBasicText` 保持 inline 格式支持
+- ChatScreen 和 SummaryDialog 中 `Markdown` 调用传入 `components = catppuccinMarkdownComponents`
+
+**6c. 滑入/滑出卡顿 + 文字截断修复**
+- 单元格 AnnotatedString 预计算 + `remember(node, content)` 缓存，避免滚动时重复 Markdown 解析
+- 使用 `key()` 为每行提供稳定 composition 标识，Compose 可精确跳过未变更的行
+- 移除 `height(IntrinsicSize.Min)`，消除昂贵的 intrinsic 测量
+- 移除 `maxLines=1` + `overflow=Ellipsis`，长文本自动换行显示
+
 ---
 
 ## 2026-07-08

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
+import com.zxxf.assistant.ui.chat.components.catppuccinMarkdownComponents
 import com.zxxf.assistant.ui.theme.Surface0
 
 @Composable
@@ -80,7 +81,8 @@ fun SummaryDialog(
                         Markdown(
                             content = summary,
                             modifier = Modifier.fillMaxWidth(),
-                            colors = markdownColor(codeBackground = Surface0)
+                            colors = markdownColor(codeBackground = Surface0),
+                            components = catppuccinMarkdownComponents
                         )
                     }
                 }
