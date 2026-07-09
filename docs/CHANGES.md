@@ -326,6 +326,28 @@ catppuccinMarkdownComponents (val, 顶层单例)
 **7f. 删除确认**
 - AlertDialog 逻辑保持不变，移至面板底部
 
+### 8. 标题响应式排版 + Markdown heading 渲染适配
+
+**类型**：UI 优化
+
+**文件**：
+- `ui/theme/Type.kt`
+- `ui/chat/components/MarkdownComponents.kt`
+
+**说明**：
+
+**8a. 标题字号响应式收窄**
+- headlineLarge: 32.sp → **24.sp**（小屏手机不挤压不换行）
+- headlineMedium: 28.sp → **20.sp**
+- headlineSmall: 24.sp → **17.sp**
+- titleLarge: 22.sp → **18.sp**
+- 所有 headline/title 级别显式设置 lineHeight，行间距紧凑不浪费空间
+
+**8b. Markdown heading 渲染适配**
+- 在 `MarkdownComponents.kt` 中新增 heading1–heading6 六个覆盖点
+- 每个覆盖点显式引用 `MaterialTheme.typography.headlineLarge` 等样式
+- 确保标题不使用写死的 `TextStyle`，全局字号配置一键生效
+
 ---
 
 ## 2026-07-08

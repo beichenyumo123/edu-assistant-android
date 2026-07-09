@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.compose.elements.MarkdownHeader
 import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
@@ -49,6 +51,51 @@ val catppuccinMarkdownComponents: MarkdownComponents = run {
             CatppuccinMarkdownTable(
                 content = model.content,
                 node = model.node,
+            )
+        },
+        // ── Heading overrides — 显式注入 MaterialTheme.typography ────────
+        // 调用 MarkdownHeader（库默认渲染器）而非 Text()，
+        // 保留 buildMarkdownAnnotatedString 递归渲染内联格式（加粗/斜体/代码/链接）
+        heading1 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.headlineLarge,
+            )
+        },
+        heading2 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.headlineMedium,
+            )
+        },
+        heading3 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        },
+        heading4 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.titleLarge,
+            )
+        },
+        heading5 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        },
+        heading6 = { model ->
+            MarkdownHeader(
+                content = model.content,
+                node = model.node,
+                style = MaterialTheme.typography.titleSmall,
             )
         }
     ).also { Log.i(TAG, "Initialized OK") }
