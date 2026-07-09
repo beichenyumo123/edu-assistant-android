@@ -197,6 +197,24 @@
 - JS 高度测量回退链：`body.scrollHeight` → `documentElement.scrollHeight` → `firstElementChild.scrollHeight`
 - 初始高度 120dp → 200dp
 
+**6g. WebView → 纯 Compose 表格（彻底修复挤压/换行/样式/滚动）**
+- **废弃 WebView 方案**，回归纯 Compose 实现。WebView CSS 在部分设备上不生效导致表格无边框、无横向滚动、文字挤压成单字竖排
+- 使用 `markdownComponents(table = { model -> ... })` 完全替换默认表格（mikepenz 0.38.0 无 `customTable`/`customTableHeader` 等 builder API，只有顶层 `table` 覆盖点）
+- 核心架构：
+  - 外层 `Box(Modifier.wrapContentWidth(unbounded = true).horizontalScroll(...).border(...))` — 允许内容超出屏幕宽度，无 `BoxWithConstraints`（消除嵌套滚动卡顿和 intrinsic 测量开销）
+  - 单元格 `Box(Modifier.widthIn(min = 80.dp).border(0.5.dp, Surface1).padding(...))` — 强制最小列宽防挤压，可见网格线
+  - 表头行 `Row(Modifier.background(Surface0))` — Catppuccin 表头背景
+  - 单元格文本经由 `buildMarkdownAnnotatedString` + `MarkdownBasicText(softWrap = true)` — 保留行内格式（粗体/斜体/链接），自然换行不截断
+- 保留 `pointerInput { detectHorizontalDragGestures { _, _ -> } }` 防抽屉冲突
+- 零 deprecation 警告（不再依赖 `HtmlGenerator.generateHtml(customizer)`）
+- ChatScreen.kt / SummaryDialog.kt 均已传入 `components = catppuccinMarkdownComponents`，无需修改
+
+**6h. 表格闪退修复 + 防御性渲染 + 调试日志**
+- 上一版 `buildMarkdownAnnotatedString` + `MarkdownBasicText` 在特定表格 AST 结构下闪退（logcat 无输出，推测为 native/composition 层崩溃）
+- 替换为 `getUnescapedTextInNode` + `BasicText`（Compose Foundation），零外部 CompositionLocal 依赖
+- 全链路添加 `android.util.Log`（TAG: `MarkdownTable`）：table 入口（子节点数）、行解析结果（行数+单元格数）、每格文本前 40 字符
+- `adb logcat -s MarkdownTable:D` 可实时查看表格渲染日志
+
 ### 7. 对话历史 UI 深度重构（左侧抽屉）
 
 **类型**：UI 重构
