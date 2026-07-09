@@ -107,8 +107,15 @@ fun ChatScreen(
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
-                ConversationDrawerContent(
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.padding(
+                    top = 64.dp,
+                    bottom = 16.dp,
+                    end = 20.dp
+                )
+            ) {
+                ConversationBottomSheetContent(
                     conversations = uiState.conversations,
                     currentConversationId = uiState.currentConversationId,
                     onNewConversation = {
@@ -127,7 +134,7 @@ fun ChatScreen(
             }
         }
     ) {
-        Scaffold(
+    Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(

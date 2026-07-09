@@ -170,11 +170,68 @@
   - 使用 `buildMarkdownAnnotatedString` + `MarkdownBasicText` 保持 inline 格式支持
 - ChatScreen 和 SummaryDialog 中 `Markdown` 调用传入 `components = catppuccinMarkdownComponents`
 
-**6c. 滑入/滑出卡顿 + 文字截断修复**
+**6c. 滑入/滑出卡顿修复**
 - 单元格 AnnotatedString 预计算 + `remember(node, content)` 缓存，避免滚动时重复 Markdown 解析
 - 使用 `key()` 为每行提供稳定 composition 标识，Compose 可精确跳过未变更的行
 - 移除 `height(IntrinsicSize.Min)`，消除昂贵的 intrinsic 测量
-- 移除 `maxLines=1` + `overflow=Ellipsis`，长文本自动换行显示
+
+**6d. 单元格宽度 + 横向滚动**
+- 单元格由 `weight(1f)` 改为固定 `width(dp)`，避免窄列导致 3 个汉字就换行
+- 所有行的同一列使用统一宽度（取该列各单元格最大内容宽度，80-240dp 之间），确保列对齐
+- 宽度估算：CJK 字符 2× 权重，~7dp/拉丁等效字符
+- 外层 Box 添加 `horizontalScroll(rememberScrollState())`，表格超出气泡宽度时可左右滑动
+- 单元格文字恢复 `softWrap = false, maxLines = 1, overflow = Ellipsis`
+
+**6e. HTML 表格（WebView）替代 Compose 自定义表格**
+- 用 `org.intellij.markdown.html.HtmlGenerator` 将表格 AST 转为 HTML，通过 `AndroidView` + `WebView` 渲染
+- 浏览器引擎原生处理列宽计算、文字换行、横向滚动，无 Compose 布局开销
+- Catppuccin CSS：表头 `Surface0` 背景、单元格 `Surface1` 边框、`#4c4f69` 文字色
+- WebView 高度按 `rowCount * 30dp + 2dp` 估算
+- 移除所有旧 Compose 表格代码（`CachedCell`/`CachedRow`/`RowType`/`MarkdownBasicText`/`buildMarkdownAnnotatedString`/AST 遍历/`key()`等）
+
+**6f. WebView 表格 — 横向滑动 + 抽屉冲突 + 底部截断修复**
+- 表格 CSS body 新增 `overflow-x: auto` + `-webkit-overflow-scrolling: touch`，table 改为 `width: max-content`，表宽超出视口时浏览器原生处理横向滚动
+- 新增 `.pointerInput { detectHorizontalDragGestures { _, _ -> } }`，消费表格区域横向滑动事件，防止传播到 ModalNavigationDrawer 触发侧边栏
+- WebView 新增 `overScrollMode = OVER_SCROLL_NEVER` + `isVerticalFadingEdgeEnabled = false`，消除边缘光晕效果
+- 高度测量从 `onPageFinished` 内直接调用 `evaluateJavascript` 改为 `view.post {}` 延迟到首次 layout 完成后，追加 `postDelayed(300ms)` 二次保险（慢渲染表格场景）
+- JS 高度测量回退链：`body.scrollHeight` → `documentElement.scrollHeight` → `firstElementChild.scrollHeight`
+- 初始高度 120dp → 200dp
+
+### 7. 对话历史 UI 深度重构（左侧抽屉）
+
+**类型**：UI 重构
+
+**文件**：
+- `ui/chat/ChatScreen.kt`
+- `ui/chat/components/ConversationDrawer.kt`
+
+**说明**：
+
+**7a. 抽屉容器优化**
+- 保留 `ModalNavigationDrawer`（左侧滑出），抽屉内容包裹在 `ModalDrawerSheet` 中
+- 抽屉面板背景色设为 `MaterialTheme.colorScheme.surface`（Latte Base `#eff1f5`），与整体主题一致
+
+**7b. 胶囊"新建对话"按钮**
+- 放置在抽屉顶部吸顶位置
+- 外形：`RoundedCornerShape(percent = 50)` 完全胶囊形
+- 背景：`Blue`（`#1e66f5`），文字 + 图标：`Color.White`
+- 内部：`Icons.Filled.Add` + "新建对话" 文字，`PaddingValues(vertical = 14.dp)`
+- 点击后创建新对话并自动关闭抽屉
+
+**7d. 现代化对话 Item**
+- 形状：`RoundedCornerShape(12.dp)` 圆角卡片
+- 未选中：透明背景；选中：`Surface1.copy(alpha = 0.6f)` 半透明 Latte 表面色
+- 布局：`ChatBubbleOutline` 图标（`Subtext0` / Primary 色）+ 标题（单行省略号，`Text` / Primary 色）+ 日期副标题（`labelSmall`，`Subtext0`）+ 右侧隐藏式删除按钮（`Overlay0`）
+- `LazyColumn` 使用 `Arrangement.spacedBy(8.dp)` 垂直间距，内容区内边距 `horizontal = 16.dp, vertical = 12.dp`
+- 提取独立 `ConversationItem` composable，提高可维护性
+- 选中对话时自动关闭抽屉
+
+**7e. 空状态**
+- 无对话时居中显示 `ChatBubbleOutline` 大图标 + "暂无对话" 提示文字
+- 图标透明度 0.5，视觉上柔和低调
+
+**7f. 删除确认**
+- AlertDialog 逻辑保持不变，移至面板底部
 
 ---
 

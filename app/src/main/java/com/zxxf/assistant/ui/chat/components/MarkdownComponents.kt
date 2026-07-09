@@ -1,188 +1,189 @@
 package com.zxxf.assistant.ui.chat.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import com.mikepenz.markdown.annotator.AnnotatorSettings
-import com.mikepenz.markdown.annotator.annotatorSettings
-import com.mikepenz.markdown.annotator.buildMarkdownAnnotatedString
+import androidx.compose.ui.viewinterop.AndroidView
 import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.compose.elements.material.MarkdownBasicText
-import com.zxxf.assistant.ui.theme.Surface0
-import com.zxxf.assistant.ui.theme.Surface1
 import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.flavours.gfm.GFMElementTypes
-import org.intellij.markdown.flavours.gfm.GFMTokenTypes
-
-// ── Cached table data ──────────────────────────────────────────────────────
-
-private enum class RowType { HEADER, ROW, SEPARATOR }
-
-private data class CachedCell(
-    val annotatedText: AnnotatedString,
-    val style: TextStyle,
-)
-
-private data class CachedRow(
-    val type: RowType,
-    val cells: List<CachedCell>,
-)
+import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
+import org.intellij.markdown.html.HtmlGenerator
+import org.intellij.markdown.parser.MarkdownParser
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
 /**
  * Catppuccin-themed Markdown component overrides.
  *
- * The custom table component:
- * - Pre-computes all cell [AnnotatedString]s in [remember] to avoid
- *   recomposition overhead during LazyColumn scroll
- * - Uses fillMaxWidth + weight(1f) cells (no nested horizontal scroll)
- * - Renders visible cell borders (0.5dp Surface1) and Surface0 header
+ * The table component uses [HtmlGenerator] to convert the markdown table AST
+ * to HTML, rendered in a transparent [WebView] with Catppuccin CSS. The browser
+ * engine handles column sizing, text wrapping, and horizontal scroll natively.
  */
 val catppuccinMarkdownComponents: MarkdownComponents = markdownComponents(
     table = { model ->
-        CatppuccinMarkdownTable(
+        MarkdownTableWebView(
             content = model.content,
             node = model.node,
-            style = model.typography.text,
         )
     }
 )
 
+// ── HTML table via WebView ─────────────────────────────────────────────────
+
+/** Catppuccin Latte CSS injected into every table WebView. */
+private val TABLE_CSS = """
+body {
+    font-family: -apple-system, sans-serif;
+    font-size: 14px;
+    color: #4c4f69;
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+table {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+}
+th {
+    background: #ccd0da;
+    font-weight: bold;
+    padding: 6px 10px;
+    border: 0.5px solid #bcc0cc;
+    white-space: nowrap;
+}
+td {
+    padding: 6px 10px;
+    border: 0.5px solid #bcc0cc;
+}
+""".trimIndent()
+
+/** Initial height guess before JS measurement — generous enough to avoid flash. */
+private val INITIAL_HEIGHT_DP = 200
+
 /**
- * A custom Markdown table composable.
+ * Renders a GFM table AST node as HTML inside a transparent [WebView].
  *
- * Performance notes:
- * - No [BoxWithConstraints] — avoids sub-composition measurement
- * - No [Modifier.horizontalScroll] — avoids LazyColumn touch contention
- * - No [Modifier.height] with [IntrinsicSize] — avoids intrinsic measurement
- * - All [AnnotatedString]s cached via [remember] — no parse work on scroll
- * - [key] per row — stable composition identity across recompositions
+ * Column widths, text overflow, and horizontal scroll are all handled by the
+ * browser engine — no Compose-level layout or measurement needed.
+ *
+ * Horizontal drags are intercepted at the Compose level so that swiping
+ * across a wide table does not trigger [ModalNavigationDrawer].
  */
 @Composable
-fun CatppuccinMarkdownTable(
+fun MarkdownTableWebView(
     content: String,
     node: ASTNode,
-    style: TextStyle,
     modifier: Modifier = Modifier,
 ) {
-    val tableShape = RoundedCornerShape(8.dp)
-    val annotatorSettings = annotatorSettings()
+    val density = LocalDensity.current
 
-    // Pre-compute all cell AnnotatedStrings once — never re-parse during scroll
-    val rows = remember(node, content, annotatorSettings) {
-        node.children.mapNotNull { child ->
-            when (child.type) {
-                GFMElementTypes.HEADER -> {
-                    val cells = child.children
-                        .filter { it.type == GFMTokenTypes.CELL }
-                        .map { cell ->
-                            CachedCell(
-                                annotatedText = content.buildMarkdownAnnotatedString(
-                                    textNode = cell,
-                                    style = style.copy(fontWeight = FontWeight.Bold),
-                                    annotatorSettings = annotatorSettings,
-                                ),
-                                style = style.copy(fontWeight = FontWeight.Bold),
-                            )
-                        }
-                    CachedRow(RowType.HEADER, cells)
-                }
-
-                GFMElementTypes.ROW -> {
-                    val cells = child.children
-                        .filter { it.type == GFMTokenTypes.CELL }
-                        .map { cell ->
-                            CachedCell(
-                                annotatedText = content.buildMarkdownAnnotatedString(
-                                    textNode = cell,
-                                    style = style,
-                                    annotatorSettings = annotatorSettings,
-                                ),
-                                style = style,
-                            )
-                        }
-                    CachedRow(RowType.ROW, cells)
-                }
-
-                GFMTokenTypes.TABLE_SEPARATOR -> CachedRow(RowType.SEPARATOR, emptyList())
-
-                else -> null
-            }
-        }
+    // Build HTML once — keyed on node identity + raw markdown text
+    val html = remember(node, content) {
+        val tableMarkdown = content.substring(node.startOffset, node.endOffset)
+        val tableAst =
+            MarkdownParser(GFMFlavourDescriptor()).buildMarkdownTreeFromString(tableMarkdown)
+        val htmlGen = HtmlGenerator(tableMarkdown, tableAst, GFMFlavourDescriptor(), false)
+        val tableHtml = htmlGen.generateHtml { _, _, attrs -> attrs }
+        """
+<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+$TABLE_CSS
+</style></head><body>
+$tableHtml
+</body></html>
+        """.trimIndent()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .border(0.5.dp, Surface1, tableShape)
-            .clip(tableShape)
-    ) {
-        rows.forEachIndexed { index, row ->
-            key(row.type.name + index) {
-                when (row.type) {
-                    RowType.HEADER -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Surface0)
-                        ) {
-                            row.cells.forEach { cell ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .border(0.5.dp, Surface1)
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    MarkdownBasicText(
-                                        text = cell.annotatedText,
-                                        style = cell.style,
-                                    )
+    // Height: start generous, then measure exact size via JS after layout
+    var tableHeight by remember { mutableStateOf(INITIAL_HEIGHT_DP.dp) }
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                isVerticalScrollBarEnabled = false
+                isHorizontalScrollBarEnabled = false
+                isVerticalFadingEdgeEnabled = false
+                overScrollMode = WebView.OVER_SCROLL_NEVER
+
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        // Defer measurement until after the WebView has performed
+                        // its first layout pass — onPageFinished fires before layout
+                        // is complete for complex content (e.g. tables).
+                        view.post {
+                            measureTableHeight(view) { px ->
+                                if (px > 0f) {
+                                    tableHeight = with(density) { px.toDp() }
                                 }
                             }
                         }
-                    }
-
-                    RowType.ROW -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            row.cells.forEach { cell ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .border(0.5.dp, Surface1)
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    MarkdownBasicText(
-                                        text = cell.annotatedText,
-                                        style = cell.style,
-                                    )
+                        // Retry after a short delay for slow-rendering tables
+                        view.postDelayed({
+                            measureTableHeight(view) { px ->
+                                if (px > 0f) {
+                                    tableHeight = with(density) { px.toDp() }
                                 }
                             }
-                        }
-                    }
-
-                    RowType.SEPARATOR -> {
-                        HorizontalDivider(thickness = 0.5.dp, color = Surface1)
+                        }, 300)
                     }
                 }
+                loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
             }
-        }
+        },
+        update = { webView ->
+            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .height(tableHeight)
+            .pointerInput(Unit) {
+                // Consume horizontal drags so they don't propagate to
+                // ModalNavigationDrawer and trigger the sidebar.
+                detectHorizontalDragGestures { _, _ -> }
+            }
+    )
+}
+
+// ── Height measurement ─────────────────────────────────────────────────────
+
+/**
+ * Measures the full content height of [view] via JavaScript.
+ *
+ * Calls [onResult] with the measured height in **pixels**, or 0 if measurement
+ * fails. Tries `document.body.scrollHeight` first, falls back to
+ * `document.documentElement.scrollHeight` and the first child element.
+ */
+private fun measureTableHeight(view: WebView, onResult: (Float) -> Unit) {
+    view.evaluateJavascript("""
+        (function() {
+            var h = document.body.scrollHeight;
+            if (h > 0) return h;
+            h = document.documentElement.scrollHeight;
+            if (h > 0) return h;
+            var first = document.body.firstElementChild;
+            if (first) return first.scrollHeight;
+            return 0;
+        })()
+    """.trimIndent()) { result ->
+        val px = result?.trim('"')?.toFloatOrNull() ?: 0f
+        onResult(px)
     }
 }
