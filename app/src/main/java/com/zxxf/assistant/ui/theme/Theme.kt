@@ -10,38 +10,62 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+// ═══ Catppuccin Latte — Light Color Scheme ═══
+
 private val LightColorScheme = lightColorScheme(
-    primary = Blue500,
+    primary = Blue,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD2E3FC),
-    onPrimaryContainer = Blue700,
-    secondary = Color(0xFF5F6368),
+    primaryContainer = Surface0,
+    onPrimaryContainer = Text,
+    secondary = Lavender,
     onSecondary = Color.White,
-    background = GrayBg,
-    onBackground = GrayDark,
-    surface = Color.White,
-    onSurface = GrayDark,
-    error = Red500,
+    secondaryContainer = Surface0,
+    onSecondaryContainer = Text,
+    tertiary = Mauve,
+    onTertiary = Color.White,
+    tertiaryContainer = Surface0,
+    onTertiaryContainer = Text,
+    background = Base,
+    onBackground = Text,
+    surface = Base,
+    onSurface = Text,
+    surfaceVariant = Surface0,
+    onSurfaceVariant = Subtext0,
+    error = Red,
     onError = Color.White,
-    surfaceVariant = Color(0xFFE8EAED),
-    outline = Color(0xFFDADCE0)
+    errorContainer = Maroon.copy(alpha = 0.2f),
+    onErrorContainer = Text,
+    outline = Overlay1,
+    outlineVariant = Surface1,
 )
 
+// ═══ Catppuccin Mocha — Dark Color Scheme ═══
+
 private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF8AB4F8),
-    onPrimary = Blue700,
-    primaryContainer = Blue700,
-    onPrimaryContainer = Color(0xFFD2E3FC),
-    secondary = Color(0xFFBDC1C6),
-    onSecondary = Color(0xFF202124),
-    background = Color(0xFF202124),
-    onBackground = Color(0xFFE8EAED),
-    surface = Color(0xFF303134),
-    onSurface = Color(0xFFE8EAED),
-    error = Color(0xFFF28B82),
-    onError = Color(0xFF202124),
-    surfaceVariant = Color(0xFF3C4043),
-    outline = Color(0xFF5F6368)
+    primary = BlueDark,
+    onPrimary = CrustDark,
+    primaryContainer = Surface0Dark,
+    onPrimaryContainer = TextDark,
+    secondary = LavenderDark,
+    onSecondary = CrustDark,
+    secondaryContainer = Surface0Dark,
+    onSecondaryContainer = TextDark,
+    tertiary = MauveDark,
+    onTertiary = CrustDark,
+    tertiaryContainer = Surface0Dark,
+    onTertiaryContainer = TextDark,
+    background = BaseDark,
+    onBackground = TextDark,
+    surface = BaseDark,
+    onSurface = TextDark,
+    surfaceVariant = Surface0Dark,
+    onSurfaceVariant = Subtext0Dark,
+    error = RedDark,
+    onError = CrustDark,
+    errorContainer = MaroonDark.copy(alpha = 0.2f),
+    onErrorContainer = TextDark,
+    outline = Overlay1Dark,
+    outlineVariant = Surface1Dark,
 )
 
 @Composable
@@ -55,8 +79,13 @@ fun AssistantTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            // Status bar follows surface background (softer Catppuccin look)
+            window.statusBarColor = colorScheme.surface.toArgb()
+            // Navigation bar also follows surface for immersive feel
+            window.navigationBarColor = colorScheme.surface.toArgb()
+            // Light theme: dark icons on light bars; Dark theme: light icons on dark bars
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

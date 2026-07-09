@@ -17,9 +17,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.zxxf.assistant.data.dto.EvaluationDto
-import com.zxxf.assistant.ui.theme.Green500
-import com.zxxf.assistant.ui.theme.Orange500
-import com.zxxf.assistant.ui.theme.Red500
+import com.zxxf.assistant.ui.theme.Green
+import com.zxxf.assistant.ui.theme.Peach
+import com.zxxf.assistant.ui.theme.Red
 
 /**
  * Returns a color based on score value.
@@ -33,9 +33,9 @@ private fun scoreColor(score: Double?, reversed: Boolean = false): Color {
     if (score == null) return MaterialTheme.colorScheme.outline
     val v = if (reversed) 1.0 - score else score
     return when {
-        v >= 0.7 -> Green500
-        v >= 0.4 -> Orange500
-        else -> Red500
+        v >= 0.7 -> Green
+        v >= 0.4 -> Peach
+        else -> Red
     }
 }
 
@@ -53,9 +53,9 @@ private fun riskLevelLabel(level: String?): String = when (level?.lowercase()) {
 
 @Composable
 private fun riskLevelColor(level: String?): Color = when (level?.lowercase()) {
-    "low", "低" -> Green500
-    "medium", "中" -> Orange500
-    "high", "高" -> Red500
+    "low", "低" -> Green
+    "medium", "中" -> Peach
+    "high", "高" -> Red
     else -> MaterialTheme.colorScheme.outline
 }
 

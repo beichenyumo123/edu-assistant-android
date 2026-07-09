@@ -12,10 +12,10 @@ import kotlinx.coroutines.launch
 data class ChatUiState(
     val conversations: List<ConversationDto> = emptyList(),
     val currentConversationId: Long? = null,
-    val messages: List<MessageUiItem> = emptyList(),
+    val messages: List<MessageUiItem> = emptyList(),       // completed messages only
+    val streamingMessage: MessageUiItem? = null,            // live streaming message (independent from messages)
     val isThinking: Boolean = false,
     val thinkingSteps: List<AgentStepMsg> = emptyList(),
-    val streamingContent: String = "",
     val error: String? = null,
     val totalDocumentCount: Int = 0,
     val selectedDocCount: Int = 0
@@ -62,9 +62,11 @@ class ChatViewModel(
 
     fun connectWebSocket(userId: Int) {
         viewModelScope.launch {
-            chatRepository.connectWebSocket(userId).collect { wsMessage ->
-                handleWsMessage(wsMessage)
-            }
+            chatRepository.connectWebSocket(userId)
+                .conflate()  // drop intermediate values — keep only latest when collector is busy
+                .collect { wsMessage ->
+                    handleWsMessage(wsMessage)
+                }
         }
     }
 
@@ -102,7 +104,8 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         currentConversationId = conversationId,
-                        messages = messages
+                        messages = messages,
+                        streamingMessage = null
                     )
                 }
             } catch (e: Exception) {
@@ -130,8 +133,8 @@ class ChatViewModel(
             it.copy(
                 currentConversationId = null,
                 messages = emptyList(),
+                streamingMessage = null,
                 thinkingSteps = emptyList(),
-                streamingContent = "",
                 isThinking = false
             )
         }
@@ -143,17 +146,16 @@ class ChatViewModel(
         val convId = _uiState.value.currentConversationId
         val docIds = _selectedDocIds.value.ifEmpty { null }
 
-        // Add user message
+        // Add user message to completed list; create streaming placeholder
         val userMsg = MessageUiItem(role = "user", content = text)
-        // Add empty assistant placeholder with streaming flag
-        val assistantMsg = MessageUiItem(role = "assistant", content = "", isStreaming = true)
+        val streamingMsg = MessageUiItem(role = "assistant", content = "", isStreaming = true)
 
         _uiState.update {
             it.copy(
-                messages = it.messages + userMsg + assistantMsg,
+                messages = it.messages + userMsg,
+                streamingMessage = streamingMsg,
                 isThinking = true,
                 thinkingSteps = emptyList(),
-                streamingContent = "",
                 error = null
             )
         }
@@ -163,24 +165,20 @@ class ChatViewModel(
             val wsSent = chatRepository.sendViaWebSocket(text, convId, docIds)
 
             if (!wsSent) {
-                // HTTP fallback
+                // HTTP fallback (non-streaming — response arrives all at once)
                 try {
                     val response = chatRepository.sendViaHttp(text, convId, docIds)
-                    val lastIdx = _uiState.value.messages.size - 1
                     _uiState.update { state ->
-                        val updated = state.messages.toMutableList()
-                        if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
-                            updated[lastIdx] = MessageUiItem(
+                        state.copy(
+                            messages = state.messages + MessageUiItem(
                                 role = "assistant",
                                 content = response.message.content,
                                 sources = response.message.sources,
                                 agentSteps = response.agentSteps,
                                 evaluation = response.evaluation,
                                 isStreaming = false
-                            )
-                        }
-                        state.copy(
-                            messages = updated,
+                            ),
+                            streamingMessage = null,
                             isThinking = false,
                             currentConversationId = response.conversationId
                         )
@@ -188,13 +186,8 @@ class ChatViewModel(
                     loadConversations()
                 } catch (e: Exception) {
                     _uiState.update { state ->
-                        val updated = state.messages.toMutableList()
-                        // Remove the empty assistant placeholder
-                        if (updated.isNotEmpty() && updated.last().role == "assistant" && updated.last().content.isEmpty()) {
-                            updated.removeLast()
-                        }
                         state.copy(
-                            messages = updated,
+                            streamingMessage = null,
                             isThinking = false,
                             error = e.message ?: "消息发送失败"
                         )
@@ -226,35 +219,31 @@ class ChatViewModel(
                 }
             }
             is WsMessage.Token -> {
+                // Only update streamingMessage.content — no list copy, no O(n) overhead
                 _uiState.update { state ->
-                    val newStreaming = state.streamingContent + msg.content
-                    val updated = state.messages.toMutableList()
-                    val lastIdx = updated.size - 1
-                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
-                        updated[lastIdx] = updated[lastIdx].copy(
-                            content = newStreaming,
-                            isStreaming = true
+                    val current = state.streamingMessage
+                    if (current != null) {
+                        state.copy(
+                            streamingMessage = current.copy(
+                                content = current.content + msg.content
+                            )
                         )
-                    }
-                    state.copy(messages = updated, streamingContent = newStreaming)
+                    } else state
                 }
             }
             is WsMessage.Done -> {
+                // Move streamingMessage into completed messages with metadata
                 _uiState.update { state ->
-                    val updated = state.messages.toMutableList()
-                    val lastIdx = updated.size - 1
-                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant") {
-                        updated[lastIdx] = updated[lastIdx].copy(
-                            sources = msg.sources,
-                            agentSteps = msg.agentSteps,
-                            evaluation = msg.evaluation,
-                            isStreaming = false
-                        )
-                    }
+                    val completed = state.streamingMessage?.copy(
+                        sources = msg.sources,
+                        agentSteps = msg.agentSteps,
+                        evaluation = msg.evaluation,
+                        isStreaming = false
+                    )
                     state.copy(
-                        messages = updated,
+                        messages = if (completed != null) state.messages + completed else state.messages,
+                        streamingMessage = null,
                         isThinking = false,
-                        streamingContent = "",
                         thinkingSteps = emptyList()
                     )
                 }
@@ -262,12 +251,14 @@ class ChatViewModel(
             }
             is WsMessage.Error -> {
                 _uiState.update { state ->
-                    val updated = state.messages.toMutableList()
-                    val lastIdx = updated.size - 1
-                    if (lastIdx >= 0 && updated[lastIdx].role == "assistant" && updated[lastIdx].isStreaming) {
-                        updated[lastIdx] = updated[lastIdx].copy(isStreaming = false)
-                    }
-                    state.copy(messages = updated, isThinking = false, error = msg.message)
+                    // Keep the partial streaming content but mark as not-streaming
+                    val failed = state.streamingMessage?.copy(isStreaming = false)
+                    state.copy(
+                        messages = if (failed != null) state.messages + failed else state.messages,
+                        streamingMessage = null,
+                        isThinking = false,
+                        error = msg.message
+                    )
                 }
             }
         }

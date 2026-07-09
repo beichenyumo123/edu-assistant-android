@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -17,6 +18,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.boswelja.markdown.material3.MarkdownDocument
+import com.boswelja.markdown.style.CodeBlockStyle
+import com.zxxf.assistant.ui.theme.Surface0
 
 @Composable
 fun SummaryDialog(
@@ -76,7 +79,12 @@ fun SummaryDialog(
                     ) {
                         MarkdownDocument(
                             markdown = summary,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            codeBlockStyle = CodeBlockStyle(
+                                background = Surface0,
+                                shape = RoundedCornerShape(8.dp),
+                                innerPadding = PaddingValues(12.dp)
+                            )
                         )
                     }
                 }
