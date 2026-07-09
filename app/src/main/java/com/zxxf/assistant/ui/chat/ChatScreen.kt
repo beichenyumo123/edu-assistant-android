@@ -8,6 +8,8 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,13 +31,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.boswelja.markdown.material3.MarkdownDocument
-import com.boswelja.markdown.style.CodeBlockStyle
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
 import com.zxxf.assistant.AppContainer
 import com.zxxf.assistant.ui.chat.components.*
 import com.zxxf.assistant.ui.chat.memory.MemorySheet
 import com.zxxf.assistant.ui.knowledge.KnowledgeSheet
 import com.zxxf.assistant.ui.theme.Surface0
+import com.zxxf.assistant.ui.theme.Surface1
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -183,12 +186,22 @@ fun ChatScreen(
                 )
             },
             bottomBar = {
-                Column {
-                    // Document scope indicator above input
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(24.dp)
+                        )
+                        .border(0.5.dp, Surface1, RoundedCornerShape(24.dp))
+                        .padding(12.dp)
+                ) {
                     DocumentScopeBar(
                         totalDocumentCount = uiState.totalDocumentCount,
                         selectedDocCount = uiState.selectedDocCount,
-                        onOpenKnowledgeSheet = { showKnowledgeSheet = true }
+                        onOpenKnowledgeSheet = { showKnowledgeSheet = true },
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                     InputBar(
                         isThinking = uiState.isThinking,
@@ -382,16 +395,12 @@ fun MessageBubble(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
-                // Completed assistant message: render Markdown with Catppuccin code blocks
+                // Completed assistant message: render Markdown with Catppuccin styling
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    MarkdownDocument(
-                        markdown = message.content.ifEmpty { "..." },
+                    Markdown(
+                        content = message.content.ifEmpty { "..." },
                         modifier = Modifier.fillMaxWidth(),
-                        codeBlockStyle = CodeBlockStyle(
-                            background = Surface0,
-                            shape = RoundedCornerShape(8.dp),
-                            innerPadding = PaddingValues(12.dp)
-                        )
+                        colors = markdownColor(codeBackground = Surface0)
                     )
                 }
             }

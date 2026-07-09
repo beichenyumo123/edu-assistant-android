@@ -1,7 +1,9 @@
 package com.zxxf.assistant.ui.chat.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -11,10 +13,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zxxf.assistant.ui.theme.Blue
+import com.zxxf.assistant.ui.theme.Surface0
+import com.zxxf.assistant.ui.theme.Surface1
 
 /**
- * A horizontal bar shown above the input area that indicates the current
- * document scope selection status for retrieval filtering.
+ * A pill-shaped tag shown inside the unified input container that indicates
+ * the current document scope selection for retrieval filtering.
  *
  * States:
  * - No documents uploaded: hidden (returns nothing)
@@ -28,7 +33,6 @@ fun DocumentScopeBar(
     onOpenKnowledgeSheet: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Don't show if no documents exist
     if (totalDocumentCount == 0) return
 
     val (label, icon) = when {
@@ -38,38 +42,29 @@ fun DocumentScopeBar(
     }
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        tonalElevation = 1.dp
+        modifier = modifier.clickable { onOpenKnowledgeSheet() },
+        shape = RoundedCornerShape(percent = 50),
+        color = Surface0,
+        border = BorderStroke(0.5.dp, Surface1)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onOpenKnowledgeSheet() }
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 icon,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.primary
+                modifier = Modifier.size(14.dp),
+                tint = Blue
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+                color = Blue,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                Icons.Filled.ChevronRight,
-                contentDescription = "选择文档",
-                modifier = Modifier.size(16.dp),
-                tint = MaterialTheme.colorScheme.outline
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

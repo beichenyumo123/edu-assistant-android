@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.boswelja.markdown.material3.MarkdownDocument
-import com.boswelja.markdown.style.CodeBlockStyle
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
 import com.zxxf.assistant.ui.theme.Surface0
 
 @Composable
@@ -77,14 +77,10 @@ fun SummaryDialog(
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
                     ) {
-                        MarkdownDocument(
-                            markdown = summary,
+                        Markdown(
+                            content = summary,
                             modifier = Modifier.fillMaxWidth(),
-                            codeBlockStyle = CodeBlockStyle(
-                                background = Surface0,
-                                shape = RoundedCornerShape(8.dp),
-                                innerPadding = PaddingValues(12.dp)
-                            )
+                            colors = markdownColor(codeBackground = Surface0)
                         )
                     }
                 }

@@ -14,7 +14,7 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 
 # Markdown
-composeMarkdown = "1.1.5"
+composeMarkdown = "0.38.0"
 
 # Image
 coil = "2.7.0"
@@ -57,8 +57,8 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 
 # Markdown
-compose-markdown-core = { group = "io.github.boswelja.markdown", name = "core", version.ref = "composeMarkdown" }
-compose-markdown-material3 = { group = "io.github.boswelja.markdown", name = "material3", version.ref = "composeMarkdown" }
+compose-markdown-core = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "composeMarkdown" }
+compose-markdown-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "composeMarkdown" }
 
 # Image
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

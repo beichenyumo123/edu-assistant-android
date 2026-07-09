@@ -76,9 +76,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
 
-    // Markdown
+    // Markdown (mikepenz multiplatform-markdown-renderer)
     implementation(libs.compose.markdown.core)
-    implementation(libs.compose.markdown.material3)
+    implementation(libs.compose.markdown.m3)
 
     // Image
     implementation(libs.coil.compose)
