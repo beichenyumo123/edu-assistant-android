@@ -7,12 +7,10 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Memory
@@ -23,19 +21,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.boswelja.markdown.material3.MarkdownDocument
-import com.boswelja.markdown.style.CodeBlockStyle
 import com.zxxf.assistant.AppContainer
 import com.zxxf.assistant.ui.chat.components.*
 import com.zxxf.assistant.ui.chat.memory.MemorySheet
 import com.zxxf.assistant.ui.knowledge.KnowledgeSheet
-import com.zxxf.assistant.ui.theme.Surface0
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,29 +57,24 @@ fun ChatScreen(
     var showKnowledgeSheet by remember { mutableStateOf(false) }
     var showMemorySheet by remember { mutableStateOf(false) }
 
+    // Track conversation completion to trigger memory refresh
+    var memoryRefreshKey by remember { mutableStateOf(0) }
+    LaunchedEffect(uiState.isThinking) {
+        if (!uiState.isThinking && uiState.messages.isNotEmpty()) {
+            // Conversation just completed — bump key to refresh memory if sheet is open
+            memoryRefreshKey++
+        }
+    }
+
     // Connect WebSocket on first launch
     LaunchedEffect(Unit) {
-        try {
-            val user = appContainer.authRepository.getCurrentUser()
-            chatViewModel.connectWebSocket(user.user.id)
-        } catch (e: Exception) {
-            // If getCurrentUser fails, the AuthInterceptor will handle 401
-            // Don't crash the effect — it would restart and cause flickering
-        }
+        val user = appContainer.authRepository.getCurrentUser()
+        chatViewModel.connectWebSocket(user.user.id)
     }
 
-    // Scroll instantly while streaming (no animation overhead per token)
-    LaunchedEffect(uiState.streamingMessage?.content) {
-        if (uiState.streamingMessage != null && uiState.messages.isNotEmpty()) {
-            // scrollToItem: instant scroll — avoids per-token animateScrollToItem overhead
-            // "streaming" item is right after all completed messages
-            listState.scrollToItem(uiState.messages.size)
-        }
-    }
-
-    // Smooth scroll on message completion (Done / conversation switch)
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty() && uiState.streamingMessage == null) {
+    // Auto-scroll to bottom on new messages or streaming content
+    LaunchedEffect(uiState.messages.size, uiState.streamingContent) {
+        if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }
@@ -202,11 +191,7 @@ fun ChatScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                val hasContent = uiState.messages.isNotEmpty()
-                    || uiState.streamingMessage != null
-                    || uiState.isThinking
-
-                if (!hasContent) {
+                if (uiState.messages.isEmpty() && !uiState.isThinking) {
                     // Welcome screen
                     WelcomeCards(
                         onPresetClick = { question -> chatViewModel.sendMessage(question) }
@@ -221,34 +206,18 @@ fun ChatScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // Completed messages — stable keys, never recompose during streaming
                         itemsIndexed(
                             uiState.messages,
-                            key = { index, msg -> msg.id ?: index.toLong() }
-                        ) { _, message ->
+                            key = { index, _ -> index }
+                        ) { index, message ->
                             MessageBubble(
                                 message = message,
-                                showDetails = message.role == "assistant"
+                                showDetails = message.role == "assistant" && !message.isStreaming
                             )
                         }
 
-                        // Live streaming message — separate item with stable key "streaming"
-                        // Only this item recomposes on each token
-                        val streaming = uiState.streamingMessage
-                        if (streaming != null) {
-                            item(key = "streaming") {
-                                MessageBubble(
-                                    message = streaming,
-                                    showDetails = false  // panels only appear after Done
-                                )
-                            }
-                        }
-
                         // Live thinking steps during streaming (before any tokens arrive)
-                        if (uiState.isThinking
-                            && uiState.streamingMessage?.content.isNullOrEmpty()
-                            && uiState.thinkingSteps.isNotEmpty()
-                        ) {
+                        if (uiState.isThinking && uiState.streamingContent.isEmpty() && uiState.thinkingSteps.isNotEmpty()) {
                             item(key = "live_thinking") {
                                 ThinkingSteps(
                                     steps = null,
@@ -258,10 +227,7 @@ fun ChatScreen(
                         }
 
                         // Thinking indicator (spinner when no tokens yet and no steps)
-                        if (uiState.isThinking
-                            && uiState.streamingMessage?.content.isNullOrEmpty()
-                            && uiState.thinkingSteps.isEmpty()
-                        ) {
+                        if (uiState.isThinking && uiState.streamingContent.isEmpty() && uiState.thinkingSteps.isEmpty()) {
                             item(key = "thinking_indicator") {
                                 Box(
                                     modifier = Modifier
@@ -311,6 +277,7 @@ fun ChatScreen(
     if (showMemorySheet) {
         MemorySheet(
             memoryRepository = appContainer.memoryRepository,
+            refreshKey = memoryRefreshKey,
             onDismiss = { showMemorySheet = false }
         )
     }
@@ -331,30 +298,6 @@ fun MessageBubble(
     val isUser = message.role == "user"
     val context = LocalContext.current
 
-    // Asymmetric bubble shape: user (right) has smaller bottom-right, assistant (left) has smaller bottom-left
-    val bubbleShape = if (isUser) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
-    }
-
-    // Subtle shadow for depth on the light Latte background
-    val bubbleModifier = Modifier
-        .shadow(
-            elevation = 1.dp,
-            shape = bubbleShape,
-            spotColor = Color.Black.copy(alpha = 0.05f)
-        )
-        .widthIn(max = 340.dp)
-        .combinedClickable(
-            onClick = { },
-            onLongClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("message", message.content))
-                Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
-            }
-        )
-
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
@@ -363,35 +306,38 @@ fun MessageBubble(
         Surface(
             color = if (isUser) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceVariant,
-            shape = bubbleShape,
-            border = if (!isUser) BorderStroke(0.5.dp, Surface0) else null,
-            modifier = bubbleModifier
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .widthIn(max = 340.dp)
+                .combinedClickable(
+                    onClick = { },
+                    onLongClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("message", message.content))
+                        Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                    }
+                )
         ) {
             if (isUser) {
                 // User messages: plain text only
                 Text(
                     text = message.content.ifEmpty { "..." },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(12.dp),
                     color = MaterialTheme.colorScheme.onPrimary
                 )
             } else if (message.isStreaming) {
                 // Streaming: plain text (avoid Markdown re-render flicker)
                 Text(
                     text = message.content.ifEmpty { "..." },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(12.dp),
                     color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
-                // Completed assistant message: render Markdown with Catppuccin code blocks
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                // Completed assistant message: render Markdown
+                Column(modifier = Modifier.padding(12.dp)) {
                     MarkdownDocument(
                         markdown = message.content.ifEmpty { "..." },
-                        modifier = Modifier.fillMaxWidth(),
-                        codeBlockStyle = CodeBlockStyle(
-                            background = Surface0,
-                            shape = RoundedCornerShape(8.dp),
-                            innerPadding = PaddingValues(12.dp)
-                        )
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
