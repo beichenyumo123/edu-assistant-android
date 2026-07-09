@@ -10,18 +10,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zxxf.assistant.data.repository.MemoryRepository
 
-private val answerStyleOptions = listOf("详细全面", "简洁精炼", "分点概括", "引导式")
-private val communicationToneOptions = listOf("正式专业", "轻松友好", "鼓励激励", "严谨学术")
+// Must match backend validation: user_memory.py ANSWER_STYLE_OPTIONS
+private val answerStyleOptions = listOf("结构化", "简洁", "详细", "步骤化", "表格化")
+
+// Must match backend validation: user_memory.py COMMUNICATION_TONE_OPTIONS
+private val communicationToneOptions = listOf("专业清晰", "直接高效", "耐心详细", "结构清晰")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MemorySheet(
     memoryRepository: MemoryRepository,
+    refreshKey: Int = 0,
     onDismiss: () -> Unit
 ) {
     val viewModel: MemoryViewModel = viewModel(
@@ -29,30 +34,34 @@ fun MemorySheet(
     )
     val uiState by viewModel.uiState.collectAsState()
 
-    // Local edit state (copied from API data on first load)
+    // Reload memory data every time the sheet opens
+    LaunchedEffect(Unit) {
+        viewModel.loadMemory()
+    }
+
+    // Reload when conversation completes (refreshKey bumped in ChatScreen)
+    LaunchedEffect(refreshKey) {
+        if (refreshKey > 0) {
+            viewModel.loadMemory()
+        }
+    }
+
+    // Local edit state (synced from API data)
     var memoryEnabled by remember { mutableStateOf(true) }
-    var answerStyle by remember { mutableStateOf("详细全面") }
-    var communicationTone by remember { mutableStateOf("正式专业") }
+    var answerStyle by remember { mutableStateOf("结构化") }
+    var communicationTone by remember { mutableStateOf("专业清晰") }
     var answerStyleExpanded by remember { mutableStateOf(false) }
     var toneExpanded by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var initialized by remember { mutableStateOf(false) }
 
-    // Populate from API response on first load
+    // Populate from API response on first load / refresh
     LaunchedEffect(uiState.memory) {
-        if (!initialized && uiState.memory != null) {
-            uiState.memory!!.let { mem ->
-                memoryEnabled = mem.memoryEnabled
-                mem.preferredAnswerStyle?.let { answerStyle = it }
-                mem.communicationTone?.let { communicationTone = it }
-            }
+        uiState.memory?.let { mem ->
+            memoryEnabled = mem.memoryEnabled
+            mem.preferredAnswerStyle?.let { answerStyle = it }
+            mem.communicationTone?.let { communicationTone = it }
             initialized = true
-        }
-    }
-
-    LaunchedEffect(uiState.clearSuccess) {
-        if (uiState.clearSuccess) {
-            onDismiss()
         }
     }
 
@@ -64,7 +73,14 @@ fun MemorySheet(
         }
     }
 
-    // Clear confirmation
+    LaunchedEffect(uiState.saveSuccess) {
+        if (uiState.saveSuccess) {
+            snackbarHostState.showSnackbar("AI记忆设置已保存", duration = SnackbarDuration.Short)
+            viewModel.clearError()
+        }
+    }
+
+    // Clear confirmation dialog
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
@@ -90,33 +106,19 @@ fun MemorySheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = Modifier.fillMaxHeight(0.85f)
+        modifier = Modifier.fillMaxHeight(0.88f)
     ) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "AI 记忆",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Text(
-                            text = "个性化使用画像",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
+                TopAppBar(
+                    title = { Text("AI 记忆") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "关闭")
+                        }
                     }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Filled.Close, contentDescription = "关闭")
-                    }
-                }
+                )
             }
         ) { innerPadding ->
             Column(
@@ -135,37 +137,70 @@ fun MemorySheet(
                         CircularProgressIndicator(modifier = Modifier.size(32.dp))
                     }
                 } else {
-                    // ── Stats area ──
+                    // ── Hero section (matches web) ──
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
                         )
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            StatItem(
-                                icon = Icons.Filled.QuestionAnswer,
-                                label = "问题数",
-                                value = "${uiState.memory?.questionCount ?: 0}"
-                            )
-                            StatItem(
-                                icon = if (memoryEnabled) Icons.Filled.Memory else Icons.Filled.Memory,
-                                label = "记忆状态",
-                                value = if (memoryEnabled) "已启用" else "已禁用",
-                                valueColor = if (memoryEnabled) MaterialTheme.colorScheme.tertiary
-                                    else MaterialTheme.colorScheme.outline
-                            )
+                            Surface(
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Filled.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Personalized Context",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                                Text(
+                                    text = "个性化使用画像",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
                         }
+                    }
+
+                    // ── Stats row (matches web) ──
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        StatItem(
+                            icon = Icons.Filled.ChatBubbleOutline,
+                            label = "记录问题",
+                            value = "${uiState.memory?.questionCount ?: 0}"
+                        )
+                        StatItem(
+                            icon = Icons.Filled.Memory,
+                            label = "记忆状态",
+                            value = if (memoryEnabled) "已开启" else "已关闭",
+                            valueColor = if (memoryEnabled) Color(0xFF34A853)
+                            else MaterialTheme.colorScheme.outline
+                        )
                     }
 
                     HorizontalDivider()
 
-                    // ── Settings area ──
+                    // ── Settings section (matches web "用户可控设置") ──
                     Text(
-                        text = "设置",
+                        text = "用户可控设置",
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                     )
 
@@ -175,13 +210,13 @@ fun MemorySheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "启用 AI 记忆",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                             )
                             Text(
-                                text = "允许 AI 记录你的偏好以优化回答",
+                                text = "开启后系统会记录稳定偏好并用于后续回答",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
@@ -189,7 +224,7 @@ fun MemorySheet(
                         Switch(checked = memoryEnabled, onCheckedChange = { memoryEnabled = it })
                     }
 
-                    // Answer style
+                    // Answer style (matches web options)
                     ExposedDropdownMenuBox(
                         expanded = answerStyleExpanded,
                         onExpandedChange = { answerStyleExpanded = it }
@@ -199,6 +234,7 @@ fun MemorySheet(
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("回答风格") },
+                            enabled = memoryEnabled,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = answerStyleExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor()
                         )
@@ -218,7 +254,7 @@ fun MemorySheet(
                         }
                     }
 
-                    // Communication tone
+                    // Communication tone (matches web options)
                     ExposedDropdownMenuBox(
                         expanded = toneExpanded,
                         onExpandedChange = { toneExpanded = it }
@@ -228,6 +264,7 @@ fun MemorySheet(
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("沟通语气") },
+                            enabled = memoryEnabled,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = toneExpanded) },
                             modifier = Modifier.fillMaxWidth().menuAnchor()
                         )
@@ -247,146 +284,146 @@ fun MemorySheet(
                         }
                     }
 
-                    // ── Profile area ──
+                    // Save button
+                    Button(
+                        onClick = {
+                            viewModel.saveSettings(
+                                memoryEnabled = memoryEnabled,
+                                preferredAnswerStyle = answerStyle,
+                                communicationTone = communicationTone
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isSaving
+                    ) {
+                        if (uiState.isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("保存记忆设置")
+                    }
+
+                    // ── Profile section (matches web "基础画像") ──
                     uiState.memory?.let { mem ->
-                        if (mem.grade != null || mem.major != null || mem.topTopics?.isNotEmpty() == true || mem.lastQuestion != null) {
+                        val hasProfile = mem.department != null || mem.role != null || mem.communicationTone != null
+                        if (hasProfile || mem.topTopics?.isNotEmpty() == true || mem.documentPreferences?.isNotEmpty() == true || mem.lastQuestion != null) {
+
                             HorizontalDivider()
+
+                            // 基础画像
                             Text(
-                                text = "画像",
+                                text = "基础画像",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
 
-                            // Department & Position
-                            Row(
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                )
                             ) {
-                                mem.grade?.let { dept ->
-                                    AssistChip(
-                                        onClick = {},
-                                        label = { Text("部门: $dept") },
-                                        leadingIcon = {
-                                            Icon(Icons.Filled.Business, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        }
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    ProfileRow(label = "部门", value = mem.department ?: "未填写")
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                                     )
-                                }
-                                mem.major?.let { pos ->
-                                    AssistChip(
-                                        onClick = {},
-                                        label = { Text("岗位: $pos") },
-                                        leadingIcon = {
-                                            Icon(Icons.Filled.Badge, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        }
+                                    ProfileRow(label = "岗位", value = mem.role ?: "未填写")
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 4.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                                     )
+                                    ProfileRow(label = "沟通语气", value = communicationTone)
                                 }
                             }
 
-                            // Hot topics
+                            // 常问主题
                             mem.topTopics?.takeIf { it.isNotEmpty() }?.let { topics ->
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "热门话题",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.outline
+                                    text = "常问主题",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    topics.entries.take(5).forEach { (topic, _) ->
-                                        SuggestionChip(
-                                            onClick = {},
-                                            label = {
-                                                Text(
-                                                    text = topic,
-                                                    style = MaterialTheme.typography.labelSmall
-                                                )
-                                            }
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    topics.take(6).forEach { topic ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = topic.name,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                text = "${topic.count} 次",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 常用资料
+                            mem.documentPreferences?.takeIf { it.isNotEmpty() }?.let { docPrefs ->
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "常用资料",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    docPrefs.take(4).forEach { doc ->
+                                        Text(
+                                            text = "• ${doc.name}  (${doc.count} 次)",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
                             }
 
-                            // Recent question
+                            // 最近一次问题
                             mem.lastQuestion?.let { lastQ ->
-                                Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "最近问题",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.outline
+                                    text = "最近一次问题",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                                 )
                                 Text(
                                     text = lastQ,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
-                            }
-
-                            // Document preferences
-                            mem.documentPreferences?.takeIf { it.isNotEmpty() }?.let { docPrefs ->
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "常用文档",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                docPrefs.entries.take(3).forEach { (doc, count) ->
-                                    Text(
-                                        text = "• $doc ($count 次)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // ── Action buttons ──
-                    Row(
+                    // ── Clear memory (matches web bottom action) ──
+                    OutlinedButton(
+                        onClick = { showClearConfirm = true },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        enabled = (uiState.memory?.questionCount ?: 0) > 0,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.clearMemory()
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
-                        ) {
-                            Icon(Icons.Filled.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("清空记忆")
-                        }
-                        Button(
-                            onClick = {
-                                viewModel.saveSettings(
-                                    memoryEnabled = memoryEnabled,
-                                    preferredAnswerStyle = answerStyle,
-                                    communicationTone = communicationTone
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = !uiState.isSaving
-                        ) {
-                            if (uiState.isSaving) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            } else {
-                                Icon(Icons.Filled.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("保存设置")
-                        }
+                        Icon(
+                            Icons.Filled.DeleteForever,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("清空 AI 记忆")
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
@@ -401,7 +438,7 @@ private fun StatItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     value: String,
-    valueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
+    valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(
@@ -420,6 +457,28 @@ private fun StatItem(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
+@Composable
+private fun ProfileRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
         )
     }
 }

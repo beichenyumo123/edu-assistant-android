@@ -17,6 +17,7 @@ data class MemoryUiState(
     val isSaving: Boolean = false,
     val isClearing: Boolean = false,
     val error: String? = null,
+    val saveSuccess: Boolean = false,
     val clearSuccess: Boolean = false
 )
 
@@ -49,10 +50,10 @@ class MemoryViewModel(
         communicationTone: String? = null
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, error = null) }
+            _uiState.update { it.copy(isSaving = true, error = null, saveSuccess = false) }
             try {
                 val response = memoryRepository.updateMemory(memoryEnabled, preferredAnswerStyle, communicationTone)
-                _uiState.update { it.copy(memory = response, isSaving = false) }
+                _uiState.update { it.copy(memory = response, isSaving = false, saveSuccess = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "保存失败: ${e.message}", isSaving = false) }
             }
@@ -63,8 +64,8 @@ class MemoryViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isClearing = true, error = null) }
             try {
-                memoryRepository.clearMemory()
-                _uiState.update { it.copy(isClearing = false, clearSuccess = true) }
+                val refreshed = memoryRepository.clearMemory()
+                _uiState.update { it.copy(memory = refreshed, isClearing = false, clearSuccess = true) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "清空失败: ${e.message}", isClearing = false) }
             }
@@ -72,7 +73,7 @@ class MemoryViewModel(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(error = null, clearSuccess = false) }
+        _uiState.update { it.copy(error = null, saveSuccess = false, clearSuccess = false) }
     }
 
     class Factory(

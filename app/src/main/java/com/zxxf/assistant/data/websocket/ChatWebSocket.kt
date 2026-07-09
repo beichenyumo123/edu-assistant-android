@@ -2,6 +2,7 @@ package com.zxxf.assistant.data.websocket
 
 import android.util.Log
 import com.google.gson.Gson
+import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -16,6 +17,7 @@ class ChatWebSocket(
     private var reconnectAttempt = 0
     private var maxReconnect = 5
     private var shouldReconnect = true
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val _messages = Channel<WsMessage>(Channel.BUFFERED)
     val messages: Flow<WsMessage> = _messages.receiveAsFlow()
@@ -75,6 +77,7 @@ class ChatWebSocket(
         maxReconnect = 0
         webSocket?.close(1000, "User disconnected")
         webSocket = null
+        scope.cancel()
         _messages.close()
     }
 
@@ -98,10 +101,12 @@ class ChatWebSocket(
     private fun attemptReconnect() {
         if (!shouldReconnect || reconnectAttempt >= maxReconnect) return
         reconnectAttempt++
-        val delay = 2000L * reconnectAttempt
-        Log.d(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempt/$maxReconnect)")
-        Thread.sleep(delay)
-        connect()
+        val delayMs = 2000L * reconnectAttempt
+        Log.d(TAG, "Reconnecting in ${delayMs}ms (attempt $reconnectAttempt/$maxReconnect)")
+        scope.launch {
+            delay(delayMs)
+            connect()
+        }
     }
 
     private fun buildWsUrl(): String {

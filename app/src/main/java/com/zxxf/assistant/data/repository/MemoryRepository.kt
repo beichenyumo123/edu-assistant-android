@@ -9,7 +9,7 @@ class MemoryRepository(private val memoryApiProvider: () -> MemoryApi) {
     private val memoryApi: MemoryApi get() = memoryApiProvider()
 
     suspend fun getMemory(): MemoryResponse {
-        return memoryApi.getMemory()
+        return memoryApi.getMemory().memory
     }
 
     suspend fun updateMemory(
@@ -19,10 +19,10 @@ class MemoryRepository(private val memoryApiProvider: () -> MemoryApi) {
     ): MemoryResponse {
         return memoryApi.updateMemory(
             MemoryUpdateRequest(memoryEnabled, preferredAnswerStyle, communicationTone)
-        )
+        ).memory
     }
 
-    suspend fun clearMemory() {
-        memoryApi.clearMemory()
+    suspend fun clearMemory(): MemoryResponse {
+        return memoryApi.clearMemory().memory
     }
 }
