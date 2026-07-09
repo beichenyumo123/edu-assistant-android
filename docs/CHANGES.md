@@ -143,77 +143,152 @@
 - 外边距 `horizontal=12.dp, vertical=8.dp`（悬浮间距），内边距 `12.dp`
 - InputBar 背景透明化后完美融入容器，无双重边框/阴影
 
-### 6. Markdown 表格 — 滚动卡顿修复 + 边框增强
+### 6. Markdown 表格渲染 — 完整迭代记录
 
-**类型**：性能优化 + UI 优化
+**类型**：混合（性能优化 / UI 优化 / Bug 修复 / 架构重构）
 
 **文件**：
 - `ui/chat/components/MarkdownComponents.kt`
 - `ui/chat/ChatScreen.kt`
 - `ui/knowledge/SummaryDialog.kt`
 
-**说明**：
+**问题起点**：mikepenz 0.38.0 默认表格在 LazyColumn 中滚动卡顿，无单元格边框，文字被截断（`maxLines=1, overflow=Ellipsis`）。
 
-**6a. 根因分析**
-- mikepenz 0.38.0 默认 `MarkdownTable` 使用 `BoxWithConstraints` + `horizontalScroll`，当表格超过容器宽度（`tableCellWidth=160dp`，3 列 = 480dp > 气泡 340dp）时触发水平滚动
-- `BoxWithConstraints` 产生子组合测量开销，`horizontalScroll` 与 `LazyColumn` 垂直滚动产生嵌套滚动冲突，导致卡顿
-- 默认表格无单元格边框，仅依赖 `tableBackground`（alpha=0.02f），视觉上不明显
+---
 
-**6b. 自定义表格实现**
-- 重写 `MarkdownComponents.kt`，提供 `catppuccinMarkdownComponents` 全局单例
-- 自定义 `CatppuccinMarkdownTable` composable：
-  - 去除 `BoxWithConstraints` + `horizontalScroll`，改用 `Column(Modifier.fillMaxWidth())`
-  - 单元格 `Modifier.weight(1f)` 均匀分布宽度，无水平滚动条
-  - 单元格 `border(0.5.dp, Surface1)` 可见边框
-  - 表头 `Surface0` 背景 + 粗体
-  - 外层 `RoundedCornerShape(8.dp)` 圆角边框 + `clip`
-  - 使用 `buildMarkdownAnnotatedString` + `MarkdownBasicText` 保持 inline 格式支持
-- ChatScreen 和 SummaryDialog 中 `Markdown` 调用传入 `components = catppuccinMarkdownComponents`
+#### 迭代路线图
 
-**6c. 滑入/滑出卡顿修复**
-- 单元格 AnnotatedString 预计算 + `remember(node, content)` 缓存，避免滚动时重复 Markdown 解析
-- 使用 `key()` 为每行提供稳定 composition 标识，Compose 可精确跳过未变更的行
-- 移除 `height(IntrinsicSize.Min)`，消除昂贵的 intrinsic 测量
+```
+WebView HTML ──→ 纯 Compose 自建 ──→ 库默认 MarkdownTable ──→ 自定义 headerBlock/rowBlock
+     │                    │                    │                        │
+     │ ❌ CSS 不生效       │ ❌ 闪退              │ ✅ 不崩但丑             │ ✅ 对齐+边框
+     │                    │                    │                        │
+     └────────────────────┴────────────────────┴────────────────────────┘
+                                                                        │
+                                              ┌─────────────────────────┘
+                                              ▼
+                              IntrinsicSize.Max 自适应宽度 ──→ 嵌套 MarkdownElement
+                                              │                        │
+                                              │ ✅ 横向延展              │ ✅ 内联语法恢复
+                                              │                        │
+                                              ▼                        ▼
+                              固定列宽 + bodySmall 密度 ──→ 双重解析 (Two-Pass)
+                                              │                        │
+                                              │ ✅ 信息密度翻倍          │ ✅ 表格 AST 完整
+                                              └────────────────────────┘
+```
 
-**6d. 单元格宽度 + 横向滚动**
-- 单元格由 `weight(1f)` 改为固定 `width(dp)`，避免窄列导致 3 个汉字就换行
-- 所有行的同一列使用统一宽度（取该列各单元格最大内容宽度，80-240dp 之间），确保列对齐
-- 宽度估算：CJK 字符 2× 权重，~7dp/拉丁等效字符
-- 外层 Box 添加 `horizontalScroll(rememberScrollState())`，表格超出气泡宽度时可左右滑动
-- 单元格文字恢复 `softWrap = false, maxLines = 1, overflow = Ellipsis`
+---
 
-**6e. HTML 表格（WebView）替代 Compose 自定义表格**
-- 用 `org.intellij.markdown.html.HtmlGenerator` 将表格 AST 转为 HTML，通过 `AndroidView` + `WebView` 渲染
-- 浏览器引擎原生处理列宽计算、文字换行、横向滚动，无 Compose 布局开销
-- Catppuccin CSS：表头 `Surface0` 背景、单元格 `Surface1` 边框、`#4c4f69` 文字色
-- WebView 高度按 `rowCount * 30dp + 2dp` 估算
-- 移除所有旧 Compose 表格代码（`CachedCell`/`CachedRow`/`RowType`/`MarkdownBasicText`/`buildMarkdownAnnotatedString`/AST 遍历/`key()`等）
+#### 第一轮：WebView 路线（6a-6g，已废弃）
 
-**6f. WebView 表格 — 横向滑动 + 抽屉冲突 + 底部截断修复**
-- 表格 CSS body 新增 `overflow-x: auto` + `-webkit-overflow-scrolling: touch`，table 改为 `width: max-content`，表宽超出视口时浏览器原生处理横向滚动
-- 新增 `.pointerInput { detectHorizontalDragGestures { _, _ -> } }`，消费表格区域横向滑动事件，防止传播到 ModalNavigationDrawer 触发侧边栏
-- WebView 新增 `overScrollMode = OVER_SCROLL_NEVER` + `isVerticalFadingEdgeEnabled = false`，消除边缘光晕效果
-- 高度测量从 `onPageFinished` 内直接调用 `evaluateJavascript` 改为 `view.post {}` 延迟到首次 layout 完成后，追加 `postDelayed(300ms)` 二次保险（慢渲染表格场景）
-- JS 高度测量回退链：`body.scrollHeight` → `documentElement.scrollHeight` → `firstElementChild.scrollHeight`
-- 初始高度 120dp → 200dp
+**尝试**：用 `HtmlGenerator` 将表格 AST 转为 HTML，`AndroidView` + `WebView` 渲染，CSS 控制样式。
 
-**6g. WebView → 纯 Compose 表格（彻底修复挤压/换行/样式/滚动）**
-- **废弃 WebView 方案**，回归纯 Compose 实现。WebView CSS 在部分设备上不生效导致表格无边框、无横向滚动、文字挤压成单字竖排
-- 使用 `markdownComponents(table = { model -> ... })` 完全替换默认表格（mikepenz 0.38.0 无 `customTable`/`customTableHeader` 等 builder API，只有顶层 `table` 覆盖点）
-- 核心架构：
-  - 外层 `Box(Modifier.wrapContentWidth(unbounded = true).horizontalScroll(...).border(...))` — 允许内容超出屏幕宽度，无 `BoxWithConstraints`（消除嵌套滚动卡顿和 intrinsic 测量开销）
-  - 单元格 `Box(Modifier.widthIn(min = 80.dp).border(0.5.dp, Surface1).padding(...))` — 强制最小列宽防挤压，可见网格线
-  - 表头行 `Row(Modifier.background(Surface0))` — Catppuccin 表头背景
-  - 单元格文本经由 `buildMarkdownAnnotatedString` + `MarkdownBasicText(softWrap = true)` — 保留行内格式（粗体/斜体/链接），自然换行不截断
-- 保留 `pointerInput { detectHorizontalDragGestures { _, _ -> } }` 防抽屉冲突
-- 零 deprecation 警告（不再依赖 `HtmlGenerator.generateHtml(customizer)`）
-- ChatScreen.kt / SummaryDialog.kt 均已传入 `components = catppuccinMarkdownComponents`，无需修改
+**失败原因**：
+- 部分设备/Android 版本上 WebView CSS 完全不生效 → 表格无边框、无横向滚动、文字挤压成单字竖排
+- 高度测量依赖 `evaluateJavascript("document.body.scrollHeight")`，`onPageFinished` 回调时布局未完成，5 行以上表格底部截断
+- 横向滑动与 `ModalNavigationDrawer` 手势冲突
 
-**6h. 表格闪退修复 + 防御性渲染 + 调试日志**
-- 上一版 `buildMarkdownAnnotatedString` + `MarkdownBasicText` 在特定表格 AST 结构下闪退（logcat 无输出，推测为 native/composition 层崩溃）
-- 替换为 `getUnescapedTextInNode` + `BasicText`（Compose Foundation），零外部 CompositionLocal 依赖
-- 全链路添加 `android.util.Log`（TAG: `MarkdownTable`）：table 入口（子节点数）、行解析结果（行数+单元格数）、每格文本前 40 字符
-- `adb logcat -s MarkdownTable:D` 可实时查看表格渲染日志
+**教训**：WebView 在不同设备和 WebView 实现间行为不一致，不适合作为 Compose 列表中的嵌入式组件。
+
+---
+
+#### 第二轮：纯 Compose 自建（6g-6h，已废弃）
+
+**尝试**：完全从 AST 解析开始用 Compose Row/Column 构建表格，`buildMarkdownAnnotatedString` + `MarkdownBasicText` 渲染单元格。
+
+**失败原因**：**闪退**。进程 `STARTED → ENDED`，logcat 无任何异常输出。推测 `MarkdownBasicText` 或 `buildMarkdownAnnotatedString` 在特定表格 AST 结构下触发 composition 层崩溃。替换为 `getUnescapedTextInNode` + `BasicText` 后仍闪退。
+
+**教训**：不要越过库的 API 边界直接使用其内部 composable（`MarkdownBasicText`、`annotatorSettings`）——它们在库的 CompositionLocal 树外可能行为异常。
+
+---
+
+#### 第三轮：基于库骨架渐进叠加（6i-6j，部分保留）
+
+**尝试**：回到库的 `MarkdownTable`，通过 `headerBlock`/`rowBlock` 回调只替换样式层。
+
+**成果**（保留到最终版本）：
+- Row `height(IntrinsicSize.Max)` → 同行单元格高度统一，横向边框闭合
+- Cell `weight(1f).fillMaxHeight()` → 上下行列对齐
+- `Surface0` 表头背景 + `Surface1` 单元格边框
+- `MarkdownTableBasicText(maxLines=Int.MAX_VALUE)` → 自然换行不截断
+
+**局限**：库按 `columnsCount × 160dp` 固定表宽，内容多的列被压缩换行，行高极大。
+
+**演进**：废弃库的 `MarkdownTable`，自建 `Column(width(IntrinsicSize.Max))` 让内容驱动宽度，`Box(fillMaxWidth().horizontalScroll())` 做视口。加入斑马纹（偶数行 `Base@0.4`）。
+
+---
+
+#### 第四轮：信息密度优化（6j 末-6k，保留到最终版本）
+
+- `weight(1f).widthIn(min, max)` 均分 → **固定列宽** `width(80/340/160dp)`，按列索引分配，第二列（长文本）获得 340dp 充分展开
+- `bodyMedium` → **`bodySmall` + `lineHeight=18.sp`**，字体缩小一号
+- `padding(12,8)` → **`padding(8,8)`**，内边距收紧
+- `CenterStart` → **`TopStart`**，顶部对齐避免短内容垂直居中
+- 单元格内联语法通过 `MarkdownElement` 逐子节点渲染恢复（`**加粗**`、`*斜体*`、`[链接]()`）
+
+---
+
+#### 第五轮：双重解析 — 终极修复（6k 末-6l，最终方案）
+
+**问题**：`<br>` 在表格单元格内本应实现换行。第一次尝试用全局 `U+2028` 替换 `<br>`，期望它"在 Compose Text 中换行但不被 Markdown 解析器当行终止符"。**但 `org.jetbrains.markdown` 解析器仍然将 `U+2028` 视作物理换行符**，切断了 GFM 表格行 → 表格 AST 崩塌 → 边框消失、后续内容被错误解析为独立列表。
+
+**方案 — 双重解析 (Two-Pass Parsing)**：
+
+```
+外层 (Pass 1): 原始文本 → Markdown 解析器
+  ├─ <br> 原样保留
+  ├─ GFM 表格 AST 完整 ✅
+  └─ 每格通过 offset 提取 raw text
+       │
+       ├─ 局部 <br> → \n
+       └─ 嵌套 Markdown() (Pass 2)  ← 独立渲染单元格
+            ├─ **加粗** ✅
+            ├─ - 列表 ✅
+            ├─ 多行 <br> ✅
+            └─ 不传自定义 components → 无递归风险
+```
+
+**关键设计决策**：
+1. 全局**不替换** `<br>`：外层解析器看到的是合法的单行 GFM 表格
+2. 单元格内局部替换 `<br>` → `\n`：只在嵌套 `Markdown()` 的作用域内生效
+3. 嵌套 `Markdown()` 不传入 `catppuccinMarkdownComponents`：避免单元格中的嵌套表格触发无限递归
+4. 删除 ChatScreen.kt / SummaryDialog.kt 的全局 `<br>` 预处理逻辑
+
+---
+
+#### 最终架构
+
+```
+catppuccinMarkdownComponents (val, 顶层单例)
+  └─ table = { model -> CatppuccinMarkdownTable(model.content, model.node) }
+       └─ Box(fillMaxWidth + horizontalScroll)          // 视口
+            └─ Column(width(IntrinsicSize.Max))         // 内容驱动宽度
+                 ├─ Row(height(IntrinsicSize.Max) + Surface0)  // 表头
+                 │    └─ Box(width(col).fillMaxHeight.border)  // 单元格
+                 │         └─ 局部 <br>→\n + 嵌套 Markdown()   // 双重解析
+                 └─ Row(height(IntrinsicSize.Max) + 斑马纹)    // 数据行
+                      └─ (同上)
+```
+
+**样式常量**：
+| 属性 | 值 |
+|---|---|
+| 列宽 | col0=80dp, col1=340dp, col2+=160dp |
+| 单元格边框 | `0.5dp Surface1` |
+| 表外框 | `0.5dp Surface1 + RoundedCornerShape(4dp)` |
+| 内边距 | `h=8dp, v=8dp` |
+| 字体 | `bodySmall + lineHeight=18.sp` |
+| 表头 | `Surface0` 背景 + `FontWeight.Bold` |
+| 斑马纹 | 偶数行 `Base@0.4` |
+| 对齐 | `TopStart` |
+
+**关键教训**：
+1. mikepenz 0.38.0 没有 `customTable`/`customTableHeader`/`customTableRow`/`customTableCell` API——只有顶层 `table` 覆盖点。所有定制必须通过替换 `table` 组件实现
+2. 不要直接调用库的内部 composable（`MarkdownBasicText` 等）——它们依赖库的 CompositionLocal 树
+3. `U+2028` 在 `org.jetbrains.markdown` 中等同于 `\n`——不能用来在表格内换行
+4. 双重解析（外层保 AST + 内层嵌套渲染）是 GFM 表格内实现多行内容的唯一可靠方案
+5. `adb logcat -s MarkdownTable:D` 可查看表格渲染日志（TAG: `MarkdownTable`）
 
 ### 7. 对话历史 UI 深度重构（左侧抽屉）
 

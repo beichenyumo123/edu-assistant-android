@@ -3,29 +3,38 @@ package com.zxxf.assistant.ui.chat.components
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.mikepenz.markdown.annotator.annotatorSettings
+import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.compose.elements.MarkdownTable
-import com.mikepenz.markdown.compose.elements.MarkdownTableBasicText
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.zxxf.assistant.ui.theme.Base
 import com.zxxf.assistant.ui.theme.Surface0
 import com.zxxf.assistant.ui.theme.Surface1
 import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 
 private const val TAG = "MarkdownTable"
@@ -37,67 +46,85 @@ val catppuccinMarkdownComponents: MarkdownComponents = run {
     markdownComponents(
         table = { model ->
             Log.d(TAG, "table: ${model.node.children.size} children")
-            MarkdownTable(
+            CatppuccinMarkdownTable(
                 content = model.content,
                 node = model.node,
-                style = model.typography.table,
-                headerBlock = { content, headerNode, tableWidth, style ->
-                    CatppuccinTableHeader(content, headerNode, tableWidth, style)
-                },
-                rowBlock = { content, rowNode, tableWidth, style ->
-                    CatppuccinTableRow(content, rowNode, tableWidth, style)
-                },
             )
         }
-    ).also {
-        Log.i(TAG, "Initialized OK")
+    ).also { Log.i(TAG, "Initialized OK") }
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+private fun columnWidth(colIndex: Int) = when (colIndex) {
+    0 -> 80.dp
+    1 -> 340.dp
+    else -> 160.dp
+}
+private val CELL_BORDER = 0.5.dp
+private val TABLE_BORDER = 0.5.dp
+private val CELL_PAD_H = 8.dp
+private val CELL_PAD_V = 8.dp
+private val TABLE_RADIUS = 4.dp
+
+// ── Table container ────────────────────────────────────────────────────────
+
+@Composable
+private fun CatppuccinMarkdownTable(
+    content: String,
+    node: ASTNode,
+    modifier: Modifier = Modifier,
+) {
+    val scrollState = rememberScrollState()
+
+    val rows = remember(node) {
+        var dataIdx = 0
+        node.children.mapNotNull { child ->
+            when (child.type) {
+                GFMElementTypes.HEADER -> RowInfo(child, isHeader = true, dataIdx = -1)
+                GFMElementTypes.ROW -> RowInfo(child, isHeader = false, dataIdx = dataIdx++)
+                else -> null
+            }
+        }.also { Log.d(TAG, "Parsed ${it.size} rows") }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(scrollState),
+    ) {
+        Column(
+            modifier = Modifier
+                .width(IntrinsicSize.Max)
+                .border(TABLE_BORDER, Surface1, RoundedCornerShape(TABLE_RADIUS)),
+        ) {
+            rows.forEach { rowInfo ->
+                if (rowInfo.isHeader) {
+                    TableHeaderRow(rowInfo.node, content)
+                } else {
+                    TableDataRow(rowInfo.node, rowInfo.dataIdx, content)
+                }
+            }
+        }
     }
 }
 
-// ── Shared constants ───────────────────────────────────────────────────────
-
-private val CELL_BORDER = 0.5.dp
-private val CELL_PAD_H = 12.dp
-private val CELL_PAD_V = 8.dp
+private data class RowInfo(val node: ASTNode, val isHeader: Boolean, val dataIdx: Int)
 
 // ── Header row ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun CatppuccinTableHeader(
-    content: String,
-    headerNode: ASTNode,
-    tableWidth: Dp,
-    style: androidx.compose.ui.text.TextStyle,
-) {
-    val annotatorSettings = annotatorSettings()
-    val cells = remember(headerNode) {
-        headerNode.children.filter { it.type == GFMTokenTypes.CELL }
+private fun TableHeaderRow(rowNode: ASTNode, content: String) {
+    val cells = remember(rowNode) {
+        rowNode.children.filter { it.type == GFMTokenTypes.CELL }
     }
-
     Row(
         modifier = Modifier
-            .widthIn(tableWidth)
-            .height(IntrinsicSize.Max)       // 核心修复 1：整行高度 = 最高单元格
+            .height(IntrinsicSize.Max)
             .background(Surface0),
     ) {
-        cells.forEach { cell ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)              // 核心修复 2：上下行同列对齐
-                    .fillMaxHeight()         // 核心修复 3：矮单元格撑满行高
-                    .border(CELL_BORDER, Surface1)
-                    .padding(horizontal = CELL_PAD_H, vertical = CELL_PAD_V),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                MarkdownTableBasicText(
-                    content = content,
-                    cell = cell,
-                    style = style.copy(fontWeight = FontWeight.Bold),
-                    maxLines = Int.MAX_VALUE,
-                    overflow = TextOverflow.Clip,
-                    annotatorSettings = annotatorSettings,
-                )
-            }
+        cells.forEachIndexed { colIndex, cellNode ->
+            TableCell(cellNode, isHeader = true, colIndex = colIndex, content = content)
         }
     }
 }
@@ -105,40 +132,83 @@ private fun CatppuccinTableHeader(
 // ── Data row ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun CatppuccinTableRow(
-    content: String,
-    rowNode: ASTNode,
-    tableWidth: Dp,
-    style: androidx.compose.ui.text.TextStyle,
-) {
-    val annotatorSettings = annotatorSettings()
+private fun TableDataRow(rowNode: ASTNode, rowIndex: Int, content: String) {
     val cells = remember(rowNode) {
         rowNode.children.filter { it.type == GFMTokenTypes.CELL }
     }
+    val bgColor = if (rowIndex % 2 == 0) Color.Transparent
+        else Base.copy(alpha = 0.4f)
 
     Row(
         modifier = Modifier
-            .widthIn(tableWidth)
-            .height(IntrinsicSize.Max),      // 核心修复 1
+            .height(IntrinsicSize.Max)
+            .background(bgColor),
     ) {
-        cells.forEach { cell ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)              // 核心修复 2
-                    .fillMaxHeight()         // 核心修复 3
-                    .border(CELL_BORDER, Surface1)
-                    .padding(horizontal = CELL_PAD_H, vertical = CELL_PAD_V),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                MarkdownTableBasicText(
-                    content = content,
-                    cell = cell,
-                    style = style,
-                    maxLines = Int.MAX_VALUE,
-                    overflow = TextOverflow.Clip,
-                    annotatorSettings = annotatorSettings,
-                )
-            }
+        cells.forEachIndexed { colIndex, cellNode ->
+            TableCell(cellNode, isHeader = false, colIndex = colIndex, content = content)
+        }
+    }
+}
+
+// ── Single cell (nested-Markdown approach) ─────────────────────────────────
+
+/**
+ * Two-pass parser for table cells:
+ * 1. Outer pass — raw content keeps `<br>` intact so the GFM parser sees a
+ *    valid single-line table row → the table AST stays solid.
+ * 2. Inner pass — extract this cell's raw markdown from the source offsets,
+ *    replace `<br>` → `\n` locally, then render with a **nested** [Markdown]
+ *    component.  This inner component handles `**bold**`, `- lists`,
+ *    and multi-line content correctly.
+ *
+ * The nested [Markdown] deliberately omits custom `components` so that any
+ * nested table inside a cell uses library defaults — no infinite recursion.
+ */
+@Composable
+private fun TableCell(
+    cellNode: ASTNode,
+    isHeader: Boolean,
+    colIndex: Int,
+    content: String,
+) {
+    // Extract this cell's raw markdown source — no global <br> substitution
+    val rawCellText = remember(cellNode) {
+        try {
+            content.substring(cellNode.startOffset, cellNode.endOffset).trim()
+        } catch (_: Exception) {
+            "" // should never happen; offsets are always valid
+        }
+    }
+
+    // Local <br> → \n inside this cell only — outer table AST is unaffected
+    val processed = remember(rawCellText) {
+        rawCellText
+            .replace("<br>", "\n")
+            .replace("<br/>", "\n")
+            .replace("<br />", "\n")
+    }
+
+    val cellTextStyle = MaterialTheme.typography.bodySmall.copy(
+        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+        lineHeight = 18.sp,
+    )
+
+    Box(
+        modifier = Modifier
+            .width(columnWidth(colIndex))
+            .fillMaxHeight()
+            .border(CELL_BORDER, Surface1)
+            .padding(horizontal = CELL_PAD_H, vertical = CELL_PAD_V),
+        contentAlignment = Alignment.TopStart,
+    ) {
+        CompositionLocalProvider(LocalTextStyle provides cellTextStyle) {
+            // Nested Markdown — renders **bold**, lists, multi-line inside cell
+            // No custom components → library defaults, safe from recursion
+            Markdown(
+                content = processed.ifEmpty { rawCellText },
+                colors = markdownColor(),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
