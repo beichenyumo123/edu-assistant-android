@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Assistant"
+rootProject.name = "CorpKnow Compass"
 include(":app")

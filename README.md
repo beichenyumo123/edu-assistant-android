@@ -1,10 +1,10 @@
-# OnboardAgent Android
+# CorpKnow Compass Android
 
-企业入职培训助手的 Android 原生客户端，基于 Kotlin + Jetpack Compose。
+企业知识导航与入职培训助手的 Android 原生客户端，基于 Kotlin + Jetpack Compose。
 
 ## 简介
 
-OnboardAgent 是一个 RAG 驱动的企业入职培训助手，新员工可以上传公司手册、制度文档、培训材料，然后通过自然语言提问获取答案。本仓库是 Android 原生客户端，复刻 Web 前端的全部功能。
+CorpKnow Compass 是一个 RAG 驱动的企业知识导航与入职培训助手，新员工可以上传公司手册、制度文档、培训材料，然后通过自然语言提问获取答案。本仓库是 Android 原生客户端。
 
 后端仓库：[edu-assistant](https://github.com/beichenyumo123/edu-assistant)
 

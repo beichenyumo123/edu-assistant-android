@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.zxxf.assistant.ui.navigation.AppNavGraph
-import com.zxxf.assistant.ui.theme.AssistantTheme
+import com.zxxf.assistant.ui.theme.CorpKnowCompassTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
         appContainer = AppContainer(applicationContext)
 
         setContent {
-            AssistantTheme {
+            CorpKnowCompassTheme {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxSize()

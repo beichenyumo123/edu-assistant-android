@@ -1,7 +1,10 @@
 package com.zxxf.assistant.ui.auth
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -66,6 +69,7 @@ fun ProfileEditScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
@@ -74,7 +78,11 @@ fun ProfileEditScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface
+                )
             )
         }
     ) { innerPadding ->
@@ -82,108 +90,133 @@ fun ProfileEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar placeholder
             Surface(
                 modifier = Modifier
-                    .size(72.dp)
-                    .align(Alignment.CenterHorizontally),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.primaryContainer
+                    .fillMaxWidth()
+                    .widthIn(max = 480.dp),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                shadowElevation = 6.dp
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .align(Alignment.CenterHorizontally),
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                Icons.Filled.Person,
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "个人信息",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.align(Alignment.Start)
                     )
+
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text("用户名 *") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) }
+                    )
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("邮箱 *") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) }
+                    )
+
+                    HorizontalDivider()
+
+                    Text(
+                        text = "工作信息",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+
+                    OutlinedTextField(
+                        value = grade,
+                        onValueChange = { grade = it },
+                        label = { Text("部门") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = { Icon(Icons.Filled.Business, contentDescription = null) }
+                    )
+
+                    OutlinedTextField(
+                        value = major,
+                        onValueChange = { major = it },
+                        label = { Text("岗位") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        leadingIcon = { Icon(Icons.Filled.Badge, contentDescription = null) }
+                    )
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    Button(
+                        onClick = {
+                            authViewModel.updateProfile(
+                                username = username,
+                                email = email,
+                                grade = grade,
+                                major = major
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        enabled = username.length >= 3 && email.contains("@") && !authState.isLoading
+                    ) {
+                        if (authState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("保存修改")
+                    }
+
+                    OutlinedButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("取消")
+                    }
                 }
-            }
-
-            Text(
-                text = "个人信息",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.align(Alignment.Start)
-            )
-
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                label = { Text("用户名 *") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) }
-            )
-
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("邮箱 *") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Filled.Email, contentDescription = null) }
-            )
-
-            HorizontalDivider()
-
-            Text(
-                text = "工作信息",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.align(Alignment.Start)
-            )
-
-            OutlinedTextField(
-                value = grade,
-                onValueChange = { grade = it },
-                label = { Text("部门") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Filled.Business, contentDescription = null) }
-            )
-
-            OutlinedTextField(
-                value = major,
-                onValueChange = { major = it },
-                label = { Text("岗位") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                leadingIcon = { Icon(Icons.Filled.Badge, contentDescription = null) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = {
-                    authViewModel.updateProfile(
-                        username = username,
-                        email = email,
-                        grade = grade,
-                        major = major
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = username.length >= 3 && email.contains("@") && !authState.isLoading
-            ) {
-                if (authState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text("保存修改")
-            }
-
-            OutlinedButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("取消")
             }
         }
     }

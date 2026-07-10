@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.zxxf.assistant.ui.theme.Subtext0
 
 @Composable
 fun InputBar(
@@ -30,10 +29,10 @@ fun InputBar(
             onValueChange = { text = it },
             placeholder = {
                 Text(
-                    "输入入职、制度、流程或岗位培训问题...",
+                    "询问制度、流程、岗位培训...",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = Subtext0
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             modifier = Modifier.weight(1f),
@@ -46,13 +45,14 @@ fun InputBar(
                 unfocusedBorderColor = Color.Transparent,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-                disabledContainerColor = Color.Transparent
+                disabledContainerColor = Color.Transparent,
+                cursorColor = MaterialTheme.colorScheme.primary
             )
         )
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        IconButton(
+        FilledIconButton(
             onClick = {
                 val msg = text.trim()
                 if (msg.isNotEmpty()) {
@@ -61,15 +61,17 @@ fun InputBar(
                 }
             },
             enabled = text.isNotBlank() && !isThinking,
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(46.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.Send,
-                contentDescription = "发送",
-                tint = if (text.isNotBlank() && !isThinking)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.outline
+                contentDescription = "发送"
             )
         }
     }

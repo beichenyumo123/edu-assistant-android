@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.BorderStroke
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -27,12 +29,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
+import com.zxxf.assistant.R
 import com.zxxf.assistant.AppContainer
 import com.zxxf.assistant.ui.chat.components.*
 import com.zxxf.assistant.ui.chat.memory.MemorySheet
@@ -109,11 +115,10 @@ fun ChatScreen(
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.padding(
-                    top = 64.dp,
-                    bottom = 16.dp,
-                    end = 20.dp
-                )
+                drawerContentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = 328.dp)
             ) {
                 ConversationBottomSheetContent(
                     conversations = uiState.conversations,
@@ -134,11 +139,46 @@ fun ChatScreen(
             }
         }
     ) {
-    Scaffold(
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
-                    title = { Text("OnboardAgent") },
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(36.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White,
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                                )
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.ic_brand_logo),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "CorpKnow Compass",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "企业知识导航",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = {
                             scope.launch {
@@ -146,80 +186,106 @@ fun ChatScreen(
                                 else drawerState.close()
                             }
                         }) {
-                            Icon(Icons.Filled.Menu, contentDescription = "对话列表")
+                            Icon(
+                                Icons.Filled.Menu,
+                                contentDescription = "对话列表",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     },
                     actions = {
                         var menuExpanded by remember { mutableStateOf(false) }
                         IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "更多")
+                            Icon(
+                                Icons.Filled.MoreVert,
+                                contentDescription = "更多",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         DropdownMenu(
                             expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.width(216.dp),
+                            shape = RoundedCornerShape(22.dp),
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 0.dp,
+                            shadowElevation = 10.dp,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                            )
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("个人资料") },
+                            Spacer(modifier = Modifier.height(6.dp))
+                            CompassMenuItem(
+                                text = "个人资料",
+                                icon = Icons.Filled.Person,
                                 onClick = {
                                     menuExpanded = false
                                     onNavigateToProfile()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Person, contentDescription = null)
                                 }
                             )
-                            DropdownMenuItem(
-                                text = { Text("AI 记忆") },
+                            CompassMenuItem(
+                                text = "AI 记忆",
+                                icon = Icons.Filled.Memory,
                                 onClick = {
                                     menuExpanded = false
                                     showMemorySheet = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Memory, contentDescription = null)
                                 }
                             )
-                            DropdownMenuItem(
-                                text = { Text("退出登录") },
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                            )
+                            CompassMenuItem(
+                                text = "退出登录",
+                                icon = Icons.AutoMirrored.Filled.Logout,
+                                isDestructive = true,
                                 onClick = {
                                     menuExpanded = false
                                     onLogout()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                                 }
                             )
+                            Spacer(modifier = Modifier.height(6.dp))
                         }
-                    }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface
+                    )
                 )
             },
             bottomBar = {
-                Column(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(24.dp)
-                        )
-                        .border(0.5.dp, Surface1, RoundedCornerShape(24.dp))
-                        .padding(12.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)
+                    ),
+                    shadowElevation = 8.dp
                 ) {
-                    DocumentScopeBar(
-                        totalDocumentCount = uiState.totalDocumentCount,
-                        selectedDocCount = uiState.selectedDocCount,
-                        onOpenKnowledgeSheet = { showKnowledgeSheet = true },
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    InputBar(
-                        isThinking = uiState.isThinking,
-                        onSend = { text -> chatViewModel.sendMessage(text) }
-                    )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        DocumentScopeBar(
+                            totalDocumentCount = uiState.totalDocumentCount,
+                            selectedDocCount = uiState.selectedDocCount,
+                            onOpenKnowledgeSheet = { showKnowledgeSheet = true },
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        InputBar(
+                            isThinking = uiState.isThinking,
+                            onSend = { text -> chatViewModel.sendMessage(text) }
+                        )
+                    }
                 }
             }
         ) { innerPadding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(innerPadding)
             ) {
                 val hasContent = uiState.messages.isNotEmpty()
@@ -238,8 +304,8 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         // Completed messages — stable keys, never recompose during streaming
                         itemsIndexed(
@@ -336,6 +402,64 @@ fun ChatScreen(
     }
 }
 
+@Composable
+private fun CompassMenuItem(
+    text: String,
+    icon: ImageVector,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    val iconTint = if (isDestructive) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+    val iconBackground = if (isDestructive) {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.46f)
+    } else {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+    }
+    val textColor = if (isDestructive) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                color = textColor
+            )
+        },
+        onClick = onClick,
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .height(48.dp),
+        leadingIcon = {
+            Surface(
+                modifier = Modifier.size(32.dp),
+                shape = RoundedCornerShape(11.dp),
+                color = iconBackground
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(17.dp),
+                        tint = iconTint
+                    )
+                }
+            }
+        },
+        colors = MenuDefaults.itemColors(
+            textColor = textColor,
+            leadingIconColor = iconTint
+        )
+    )
+}
+
 /**
  * A single message bubble. For user messages: plain text, right-aligned.
  * For assistant messages: Markdown when complete, plain text while streaming,
@@ -351,21 +475,19 @@ fun MessageBubble(
     val isUser = message.role == "user"
     val context = LocalContext.current
 
-    // Asymmetric bubble shape: user (right) has smaller bottom-right, assistant (left) has smaller bottom-left
     val bubbleShape = if (isUser) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp)
     } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 6.dp, bottomEnd = 20.dp)
     }
 
-    // Subtle shadow for depth on the light Latte background
     val bubbleModifier = Modifier
         .shadow(
-            elevation = 1.dp,
+            elevation = if (isUser) 0.dp else 2.dp,
             shape = bubbleShape,
             spotColor = Color.Black.copy(alpha = 0.05f)
         )
-        .widthIn(max = 340.dp)
+        .widthIn(max = 348.dp)
         .combinedClickable(
             onClick = { },
             onLongClick = {
@@ -379,31 +501,49 @@ fun MessageBubble(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        // Content bubble with long-press to copy
         Surface(
-            color = if (isUser) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (isUser) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
             shape = bubbleShape,
-            border = if (!isUser) BorderStroke(0.5.dp, Surface0) else null,
+            border = if (!isUser) {
+                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f))
+            } else {
+                null
+            },
             modifier = bubbleModifier
         ) {
             if (isUser) {
-                // User messages: plain text only
                 Text(
                     text = message.content.ifEmpty { "..." },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.onPrimary
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.bodyLarge
                 )
             } else if (message.isStreaming) {
-                // Streaming: plain text (avoid Markdown re-render flicker)
-                Text(
-                    text = message.content.ifEmpty { "..." },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            .size(17.dp),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = message.content.ifEmpty { "..." },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             } else {
-                // Completed assistant message: render Markdown with Catppuccin styling
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
                     Markdown(
                         content = message.content.ifEmpty { "..." },
                         modifier = Modifier.fillMaxWidth(),

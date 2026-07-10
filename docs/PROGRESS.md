@@ -1,4 +1,4 @@
-# OnboardAgent Android — 开发进度总结
+# CorpKnow Compass Android — 开发进度总结
 
 > 最后更新：2026-07-08 · **全部功能已完成** 🎉
 

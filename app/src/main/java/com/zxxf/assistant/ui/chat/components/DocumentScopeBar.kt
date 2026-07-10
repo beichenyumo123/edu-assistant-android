@@ -13,9 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.zxxf.assistant.ui.theme.Blue
-import com.zxxf.assistant.ui.theme.Surface0
-import com.zxxf.assistant.ui.theme.Surface1
 
 /**
  * A pill-shaped tag shown inside the unified input container that indicates
@@ -44,24 +41,24 @@ fun DocumentScopeBar(
     Surface(
         modifier = modifier.clickable { onOpenKnowledgeSheet() },
         shape = RoundedCornerShape(percent = 50),
-        color = Surface0,
-        border = BorderStroke(0.5.dp, Surface1)
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 icon,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
-                tint = Blue
+                tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = Blue,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -41,7 +41,7 @@ android {
     //     create("release") {
     //         storeFile = file("keystore.jks")
     //         storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "changeit"
-    //         keyAlias = System.getenv("KEY_ALIAS") ?: "onboardagent"
+    //         keyAlias = System.getenv("KEY_ALIAS") ?: "corpknow-compass"
     //         keyPassword = System.getenv("KEY_PASSWORD") ?: "changeit"
     //     }
     // }

@@ -1,13 +1,16 @@
 package com.zxxf.assistant.ui.chat.components
 
 import android.util.Log
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,9 +35,6 @@ import com.mikepenz.markdown.compose.components.MarkdownComponents
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
-import com.zxxf.assistant.ui.theme.Base
-import com.zxxf.assistant.ui.theme.Surface0
-import com.zxxf.assistant.ui.theme.Surface1
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
@@ -104,15 +104,15 @@ val catppuccinMarkdownComponents: MarkdownComponents = run {
 // ── Constants ──────────────────────────────────────────────────────────────
 
 private fun columnWidth(colIndex: Int) = when (colIndex) {
-    0 -> 80.dp
-    1 -> 340.dp
+    0 -> 168.dp
+    1 -> 260.dp
     else -> 160.dp
 }
-private val CELL_BORDER = 0.5.dp
-private val TABLE_BORDER = 0.5.dp
-private val CELL_PAD_H = 8.dp
-private val CELL_PAD_V = 8.dp
-private val TABLE_RADIUS = 4.dp
+private val CELL_BORDER = 1.dp
+private val TABLE_BORDER = 1.dp
+private val CELL_PAD_H = 10.dp
+private val CELL_PAD_V = 9.dp
+private val TABLE_RADIUS = 16.dp
 
 // ── Table container ────────────────────────────────────────────────────────
 
@@ -124,138 +124,215 @@ private fun CatppuccinMarkdownTable(
 ) {
     val scrollState = rememberScrollState()
 
-    val rows = remember(node) {
+    val rows = remember(content, node) {
         var dataIdx = 0
         node.children.mapNotNull { child ->
             when (child.type) {
-                GFMElementTypes.HEADER -> RowInfo(child, isHeader = true, dataIdx = -1)
-                GFMElementTypes.ROW -> RowInfo(child, isHeader = false, dataIdx = dataIdx++)
+                GFMElementTypes.HEADER -> TableRowData(
+                    cells = child.tableCells(content),
+                    isHeader = true,
+                    dataIdx = -1,
+                )
+                GFMElementTypes.ROW -> TableRowData(
+                    cells = child.tableCells(content),
+                    isHeader = false,
+                    dataIdx = dataIdx++,
+                )
                 else -> null
             }
         }.also { Log.d(TAG, "Parsed ${it.size} rows") }
     }
+    val header = rows.firstOrNull { it.isHeader }
+    val dataRows = rows.filterNot { it.isHeader }
+    val columnCount = rows.firstOrNull()?.cells?.size ?: 0
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(scrollState),
-    ) {
+    if (columnCount == 2 && dataRows.isNotEmpty()) {
         Column(
-            modifier = Modifier
-                .width(IntrinsicSize.Max)
-                .border(TABLE_BORDER, Surface1, RoundedCornerShape(TABLE_RADIUS)),
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            rows.forEach { rowInfo ->
-                if (rowInfo.isHeader) {
-                    TableHeaderRow(rowInfo.node, content)
-                } else {
-                    TableDataRow(rowInfo.node, rowInfo.dataIdx, content)
+            dataRows.forEach { row ->
+                ResponsiveTwoColumnRow(row = row, header = header)
+            }
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .horizontalScroll(scrollState),
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(IntrinsicSize.Max)
+                    .border(
+                        TABLE_BORDER,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+                        RoundedCornerShape(TABLE_RADIUS),
+                    ),
+            ) {
+                rows.forEach { row ->
+                    TableGridRow(row)
                 }
             }
         }
     }
 }
 
-private data class RowInfo(val node: ASTNode, val isHeader: Boolean, val dataIdx: Int)
+private data class TableRowData(
+    val cells: List<String>,
+    val isHeader: Boolean,
+    val dataIdx: Int,
+)
 
-// ── Header row ─────────────────────────────────────────────────────────────
+private fun ASTNode.tableCells(content: String): List<String> {
+    return children.filter { it.type == GFMTokenTypes.CELL }.map { cellNode ->
+        try {
+            content.substring(cellNode.startOffset, cellNode.endOffset).trim()
+        } catch (_: Exception) {
+            ""
+        }.replace("<br>", "\n")
+            .replace("<br/>", "\n")
+            .replace("<br />", "\n")
+    }
+}
+
+// ── Mobile-first two-column table ──────────────────────────────────────────
 
 @Composable
-private fun TableHeaderRow(rowNode: ASTNode, content: String) {
-    val cells = remember(rowNode) {
-        rowNode.children.filter { it.type == GFMTokenTypes.CELL }
-    }
-    Row(
-        modifier = Modifier
-            .height(IntrinsicSize.Max)
-            .background(Surface0),
+private fun ResponsiveTwoColumnRow(
+    row: TableRowData,
+    header: TableRowData?,
+) {
+    val firstLabel = header?.cells?.getOrNull(0).toTableLabel("项目")
+    val secondLabel = header?.cells?.getOrNull(1).toTableLabel("说明")
+
+    androidx.compose.material3.Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
+        ),
     ) {
-        cells.forEachIndexed { colIndex, cellNode ->
-            TableCell(cellNode, isHeader = true, colIndex = colIndex, content = content)
+        Column(modifier = Modifier.padding(14.dp)) {
+            TableFieldLabel(firstLabel)
+            Spacer(modifier = Modifier.height(5.dp))
+            TableMarkdownText(
+                text = row.cells.getOrElse(0) { "" },
+                isHeader = true,
+                compact = false,
+            )
+
+            androidx.compose.material3.HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+            )
+
+            TableFieldLabel(secondLabel)
+            Spacer(modifier = Modifier.height(5.dp))
+            TableMarkdownText(
+                text = row.cells.getOrElse(1) { "" },
+                isHeader = false,
+                compact = false,
+            )
         }
     }
 }
 
-// ── Data row ───────────────────────────────────────────────────────────────
+@Composable
+private fun TableFieldLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+private fun String?.toTableLabel(fallback: String): String {
+    return this
+        ?.replace("**", "")
+        ?.replace("__", "")
+        ?.replace("\n", " ")
+        ?.trim()
+        ?.ifBlank { fallback }
+        ?: fallback
+}
+
+// ── Scrollable grid table for 3+ columns ───────────────────────────────────
 
 @Composable
-private fun TableDataRow(rowNode: ASTNode, rowIndex: Int, content: String) {
-    val cells = remember(rowNode) {
-        rowNode.children.filter { it.type == GFMTokenTypes.CELL }
+private fun TableGridRow(row: TableRowData) {
+    val bgColor = when {
+        row.isHeader -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f)
+        row.dataIdx % 2 == 1 -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        else -> Color.Transparent
     }
-    val bgColor = if (rowIndex % 2 == 0) Color.Transparent
-        else Base.copy(alpha = 0.4f)
-
     Row(
         modifier = Modifier
             .height(IntrinsicSize.Max)
             .background(bgColor),
     ) {
-        cells.forEachIndexed { colIndex, cellNode ->
-            TableCell(cellNode, isHeader = false, colIndex = colIndex, content = content)
+        row.cells.forEachIndexed { colIndex, cellText ->
+            TableGridCell(
+                text = cellText,
+                isHeader = row.isHeader,
+                colIndex = colIndex,
+            )
         }
     }
 }
 
-// ── Single cell (nested-Markdown approach) ─────────────────────────────────
-
-/**
- * Two-pass parser for table cells:
- * 1. Outer pass — raw content keeps `<br>` intact so the GFM parser sees a
- *    valid single-line table row → the table AST stays solid.
- * 2. Inner pass — extract this cell's raw markdown from the source offsets,
- *    replace `<br>` → `\n` locally, then render with a **nested** [Markdown]
- *    component.  This inner component handles `**bold**`, `- lists`,
- *    and multi-line content correctly.
- *
- * The nested [Markdown] deliberately omits custom `components` so that any
- * nested table inside a cell uses library defaults — no infinite recursion.
- */
 @Composable
-private fun TableCell(
-    cellNode: ASTNode,
+private fun TableGridCell(
+    text: String,
     isHeader: Boolean,
     colIndex: Int,
-    content: String,
 ) {
-    // Extract this cell's raw markdown source — no global <br> substitution
-    val rawCellText = remember(cellNode) {
-        try {
-            content.substring(cellNode.startOffset, cellNode.endOffset).trim()
-        } catch (_: Exception) {
-            "" // should never happen; offsets are always valid
-        }
-    }
-
-    // Local <br> → \n inside this cell only — outer table AST is unaffected
-    val processed = remember(rawCellText) {
-        rawCellText
-            .replace("<br>", "\n")
-            .replace("<br/>", "\n")
-            .replace("<br />", "\n")
-    }
-
-    val cellTextStyle = MaterialTheme.typography.bodySmall.copy(
-        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-        lineHeight = 18.sp,
-    )
-
     Box(
         modifier = Modifier
             .width(columnWidth(colIndex))
             .fillMaxHeight()
-            .border(CELL_BORDER, Surface1)
+            .border(CELL_BORDER, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
             .padding(horizontal = CELL_PAD_H, vertical = CELL_PAD_V),
         contentAlignment = Alignment.TopStart,
     ) {
-        CompositionLocalProvider(LocalTextStyle provides cellTextStyle) {
-            // Nested Markdown — renders **bold**, lists, multi-line inside cell
-            // No custom components → library defaults, safe from recursion
-            Markdown(
-                content = processed.ifEmpty { rawCellText },
-                colors = markdownColor(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        TableMarkdownText(
+            text = text,
+            isHeader = isHeader,
+            compact = true,
+        )
+    }
+}
+
+// ── Single cell markdown ───────────────────────────────────────────────────
+
+@Composable
+private fun TableMarkdownText(
+    text: String,
+    isHeader: Boolean,
+    compact: Boolean,
+) {
+    val baseStyle = if (compact) {
+        MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp)
+    } else {
+        MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp)
+    }
+    val cellTextStyle = baseStyle.copy(
+        fontWeight = if (isHeader) FontWeight.SemiBold else FontWeight.Normal,
+    )
+
+    CompositionLocalProvider(LocalTextStyle provides cellTextStyle) {
+        Markdown(
+            content = text.ifEmpty { "—" },
+            colors = markdownColor(
+                codeBackground = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

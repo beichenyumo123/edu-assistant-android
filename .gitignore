@@ -106,3 +106,8 @@ lint/tmp/
 
 # Apple
 .DS_Store
+
+# Agent / AI assistant files (not managed by git)
+CLAUDE.md
+CLAUDE.local.md
+.claude/

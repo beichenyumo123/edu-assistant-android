@@ -10,24 +10,22 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// ═══ Catppuccin Latte — Light Color Scheme ═══
-
 private val LightColorScheme = lightColorScheme(
     primary = Blue,
     onPrimary = Color.White,
-    primaryContainer = Surface0,
-    onPrimaryContainer = Text,
-    secondary = Lavender,
+    primaryContainer = Color(0xFFDBEAFE),
+    onPrimaryContainer = Color(0xFF1E3A8A),
+    secondary = Teal,
     onSecondary = Color.White,
-    secondaryContainer = Surface0,
-    onSecondaryContainer = Text,
-    tertiary = Mauve,
+    secondaryContainer = Color(0xFFCCFBF1),
+    onSecondaryContainer = Color(0xFF134E4A),
+    tertiary = Peach,
     onTertiary = Color.White,
-    tertiaryContainer = Surface0,
-    onTertiaryContainer = Text,
+    tertiaryContainer = Color(0xFFFFEDD5),
+    onTertiaryContainer = Color(0xFF9A3412),
     background = Base,
     onBackground = Text,
-    surface = Base,
+    surface = Color.White,
     onSurface = Text,
     surfaceVariant = Surface0,
     onSurfaceVariant = Subtext0,
@@ -39,20 +37,18 @@ private val LightColorScheme = lightColorScheme(
     outlineVariant = Surface1,
 )
 
-// ═══ Catppuccin Mocha — Dark Color Scheme ═══
-
 private val DarkColorScheme = darkColorScheme(
     primary = BlueDark,
     onPrimary = CrustDark,
-    primaryContainer = Surface0Dark,
+    primaryContainer = Color(0xFF1E3A8A),
     onPrimaryContainer = TextDark,
-    secondary = LavenderDark,
+    secondary = TealDark,
     onSecondary = CrustDark,
-    secondaryContainer = Surface0Dark,
+    secondaryContainer = Color(0xFF134E4A),
     onSecondaryContainer = TextDark,
-    tertiary = MauveDark,
+    tertiary = PeachDark,
     onTertiary = CrustDark,
-    tertiaryContainer = Surface0Dark,
+    tertiaryContainer = Color(0xFF7C2D12),
     onTertiaryContainer = TextDark,
     background = BaseDark,
     onBackground = TextDark,
@@ -69,7 +65,7 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 @Composable
-fun AssistantTheme(
+fun CorpKnowCompassTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
@@ -79,11 +75,8 @@ fun AssistantTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // Status bar follows surface background (softer Catppuccin look)
             window.statusBarColor = colorScheme.surface.toArgb()
-            // Navigation bar also follows surface for immersive feel
             window.navigationBarColor = colorScheme.surface.toArgb()
-            // Light theme: dark icons on light bars; Dark theme: light icons on dark bars
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
             WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }

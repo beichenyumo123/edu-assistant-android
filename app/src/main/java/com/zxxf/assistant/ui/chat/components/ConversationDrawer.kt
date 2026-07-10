@@ -1,5 +1,7 @@
 package com.zxxf.assistant.ui.chat.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,15 +18,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zxxf.assistant.R
 import com.zxxf.assistant.data.dto.ConversationDto
-import com.zxxf.assistant.ui.theme.Blue
 import com.zxxf.assistant.ui.theme.Overlay0
-import com.zxxf.assistant.ui.theme.Subtext0
-import com.zxxf.assistant.ui.theme.Surface1
-import com.zxxf.assistant.ui.theme.Text
 
 @Composable
 fun ConversationBottomSheetContent(
@@ -39,21 +40,41 @@ fun ConversationBottomSheetContent(
     var deleteConfirmId by remember { mutableStateOf<Long?>(null) }
 
     Column(modifier = modifier.fillMaxHeight()) {
-        // ── Header row: title + refresh ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "对话历史",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)),
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_brand_logo),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "CorpKnow Compass",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "对话历史",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             onRefresh?.let { refreshAction ->
                 IconButton(onClick = refreshAction) {
                     Icon(
@@ -66,11 +87,10 @@ fun ConversationBottomSheetContent(
         }
 
         HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 18.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
         )
 
-        // ── Conversation list or empty state ──
         if (conversations.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -111,21 +131,16 @@ fun ConversationBottomSheetContent(
         }
 
         HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 18.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
         )
 
-        // ── Capsule "New Chat" button (at bottom) ──
         Button(
             onClick = onNewConversation,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            shape = RoundedCornerShape(percent = 50),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Blue,
-                contentColor = Color.White
-            ),
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(vertical = 14.dp)
         ) {
             Icon(
@@ -142,7 +157,6 @@ fun ConversationBottomSheetContent(
             )
         }
 
-        // ── Delete confirmation dialog ──
         if (deleteConfirmId != null) {
             AlertDialog(
                 onDismissRequest = { deleteConfirmId = null },
@@ -166,9 +180,6 @@ fun ConversationBottomSheetContent(
     }
 }
 
-/**
- * A single conversation history item rendered as a rounded card.
- */
 @Composable
 private fun ConversationItem(
     conversation: ConversationDto,
@@ -177,7 +188,7 @@ private fun ConversationItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val itemShape = RoundedCornerShape(12.dp)
+    val itemShape = RoundedCornerShape(16.dp)
 
     Surface(
         modifier = modifier
@@ -186,33 +197,36 @@ private fun ConversationItem(
             .clickable(onClick = onSelect),
         shape = itemShape,
         color = if (isSelected) {
-            Surface1.copy(alpha = 0.6f)
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f)
         } else {
             Color.Transparent
+        },
+        border = if (isSelected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        } else {
+            null
         }
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Chat bubble icon
             Icon(
                 Icons.Filled.ChatBubbleOutline,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else Subtext0
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Title + subtitle
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = conversation.title,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else Text
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
                 if (conversation.updatedAt != null) {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -220,12 +234,11 @@ private fun ConversationItem(
                         text = conversation.updatedAt,
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
-                        color = Subtext0
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Delete button (subtle)
             IconButton(
                 onClick = onDelete,
                 modifier = Modifier.size(32.dp)
