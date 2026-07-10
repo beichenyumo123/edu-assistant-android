@@ -11,6 +11,7 @@ import com.zxxf.assistant.ui.auth.LoginScreen
 import com.zxxf.assistant.ui.auth.ProfileEditScreen
 import com.zxxf.assistant.ui.auth.RegisterScreen
 import com.zxxf.assistant.ui.chat.ChatScreen
+import com.zxxf.assistant.util.ServerConfig
 
 object Routes {
     const val LOGIN = "login"
@@ -28,7 +29,11 @@ fun AppNavGraph(
         factory = AuthViewModel.Factory(appContainer.authRepository)
     )
     val authState by authViewModel.uiState.collectAsState()
-    var serverUrl by remember { mutableStateOf(appContainer.serverConfig.serverUrl) }
+
+    // Force hardcoded server URL on every launch, overriding any previously saved value
+    LaunchedEffect(Unit) {
+        appContainer.baseUrl = ServerConfig.DEFAULT_URL
+    }
 
     // Determine start destination based on login state
     val startDestination = if (appContainer.authRepository.isLoggedIn()) {
@@ -44,20 +49,14 @@ fun AppNavGraph(
         composable(Routes.LOGIN) {
             LoginScreen(
                 uiState = authState,
-                serverUrl = serverUrl,
                 onLogin = { username, password ->
-                    appContainer.baseUrl = serverUrl
                     authViewModel.login(username, password)
                 },
                 onNavigateToRegister = {
                     authViewModel.clearError()
                     navController.navigate(Routes.REGISTER)
                 },
-                onClearError = { authViewModel.clearError() },
-                onUpdateServerUrl = {
-                    serverUrl = it
-                    appContainer.baseUrl = it  // persist immediately
-                }
+                onClearError = { authViewModel.clearError() }
             )
 
             // Navigate to chat when logged in (must be in LaunchedEffect, not composition)
@@ -74,7 +73,6 @@ fun AppNavGraph(
             RegisterScreen(
                 uiState = authState,
                 onRegister = { username, email, password, grade, major ->
-                    appContainer.baseUrl = serverUrl
                     authViewModel.register(username, email, password, grade, major)
                 },
                 onNavigateBack = {

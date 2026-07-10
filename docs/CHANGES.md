@@ -326,6 +326,39 @@ catppuccinMarkdownComponents (val, 顶层单例)
 **7f. 删除确认**
 - AlertDialog 逻辑保持不变，移至面板底部
 
+### 9. MemorySheet UI 全面重构（Gemini 设计 + Catppuccin 配色）
+
+**类型**：UI 重构
+
+**文件**：`ui/chat/memory/MemorySheet.kt`
+
+**说明**：
+
+**9a. 悬浮面板设计**
+- `ModalBottomSheet` 设为 `containerColor = Color.Transparent` + `dragHandle = null`，完全透明
+- 自定义 `Column` 容器接管所有视觉：`clip(RoundedCornerShape(24.dp))` + `background(Base)` + `navigationBarsPadding()` + `imePadding()` + `padding(bottom = 12.dp)`
+- 顶部 40×4dp 胶囊拖拽条（`Surface1`），右上角 `Close` 图标
+
+**9b. Gemini 风格卡片布局**
+- 设置卡片：`Surface0` 背景 + 16dp 圆角，Toggle → 下拉框 → 胶囊保存按钮（`RoundedCornerShape(50)`）
+- 统计行：`Surface1` 细边框 16dp 圆角卡片，记录问题数 + 最近更新时间
+- 所有记忆条目（常问主题/常用资料/最近问题）均用 `Surface0` 独立卡片 + 图标 + 圆角 12dp
+- 基础画像：`Surface0` 卡片 + `HorizontalDivider` 分隔
+
+**9c. 交互优化**
+- 保存按钮仅在有未保存更改时启用（`hasChanges` 检测）
+- Snackbar → **Toast** 反馈（保存成功/清空成功/错误）
+- 下拉框封装 `StyledDropdown`：统一 `Base` 背景、`Surface1` 边框、`Text` 文字色
+- 清空按钮改用 `OutlinedButton` + 红色胶囊 + 边框 + loading spinner
+- `LazyColumn` + `spacedBy(20.dp)` + `PaddingValues(bottom = 20.dp)`
+
+**9d. 图标语义化**
+- 标题：`Icons.Filled.Memory`
+- 常问主题：`Icons.Filled.AutoAwesome`
+- 常用资料：`Icons.Filled.Description`
+- 最近问题：`Icons.Filled.QuestionAnswer`
+- 统计：`Icons.Filled.ChatBubbleOutline` + `Icons.Filled.Update`
+
 ### 8. 标题响应式排版 + Markdown heading 渲染适配
 
 **类型**：UI 优化
@@ -347,6 +380,22 @@ catppuccinMarkdownComponents (val, 顶层单例)
 - 在 `MarkdownComponents.kt` 中新增 heading1–heading6 六个覆盖点
 - 每个覆盖点显式引用 `MaterialTheme.typography.headlineLarge` 等样式
 - 确保标题不使用写死的 `TextStyle`，全局字号配置一键生效
+
+### 10. 自定义 APP 图标
+
+**类型**：资源替换
+
+**文件**：
+- `res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher.png`
+- `res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}/ic_launcher_round.png`
+- `res/mipmap-anydpi/ic_launcher.xml`（已删除）
+- `res/mipmap-anydpi/ic_launcher_round.xml`（已删除）
+
+**说明**：
+- 将 Android Studio 默认的绿色机器人图标替换为自定义品牌图标（`图标.png`）
+- 源文件 1056×1056 缩放为各密度桶标准尺寸：mdpi 48dp、hdpi 72dp、xhdpi 96dp、xxhdpi 144dp、xxxhdpi 192dp
+- 移除 `mipmap-anydpi` 自适应图标 XML，统一使用光栅图标覆盖所有 API 级别
+- `ic_launcher` 和 `ic_launcher_round` 使用同一图标
 
 ---
 
